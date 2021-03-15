@@ -1,6 +1,7 @@
 import os, time
 import numpy as np
 import pybullet as p
+import matplotlib.pyplot as plt
 
 from .env import AssistiveEnv
 
@@ -25,8 +26,6 @@ class DressingEnv(AssistiveEnv):
         # # action = (target_joint_angles - current_joint_angles) * 10
         # # self.take_step(action)
         self.take_step(np.zeros(7))
-        print('Time:', time.time() - self.time)
-        self.time = time.time()
 
 
         # Get cloth data
@@ -43,9 +42,13 @@ class DressingEnv(AssistiveEnv):
                 break
             if not np.array_equal(f, np.zeros(3)):
                 self.points[i].set_base_pos_orient(cp, [0, 0, 0, 1])
+                color = plt.cm.jet(min(np.linalg.norm(f)/0.5, 1.0)) - np.array([0, 0, 0, 0.5])
+                p.changeVisualShape(self.points[i].body, -1, rgbaColor=color, flags=0, physicsClientId=self.id)
                 total_force += np.linalg.norm(f)
                 i += 1
-        print('Force:', total_force)
+                # print(plt.cm.jet(0.0), plt.cm.jet(1.0))
+        print('Time:', time.time() - self.time, 'Force:', total_force)
+        self.time = time.time()
         for j in range(i, len(self.points)):
             self.points[j].set_base_pos_orient([100, 100+j, 100], [0, 0, 0, 1])
 
@@ -105,7 +108,10 @@ class DressingEnv(AssistiveEnv):
         # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'sleeve_585v.obj'), scale=0.75, mass=0.1, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=10, springDampingStiffness=1, springDampingAllDirections=0, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
         self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'sleeve_585v.obj'), scale=0.75, mass=0.1, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=100, springDampingStiffness=0.1, springDampingAllDirections=0, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
 
-        p.changeVisualShape(self.cloth, -1, rgbaColor=[1, 1, 1, 0.5], flags=0)
+        # texture = p.loadTexture(os.path.join(self.directory, 'clothing', 'textures', 'fabric.jpg'), physicsClientId=self.id)
+        # texture = p.loadTexture(os.path.join(self.directory, 'clothing', 'textures', 'uvmap.png'), physicsClientId=self.id)
+        # p.changeVisualShape(self.cloth, -1, rgbaColor=[1, 1, 1, 1], textureUniqueId=texture, flags=0, physicsClientId=self.id)
+        p.changeVisualShape(self.cloth, -1, rgbaColor=[1, 1, 1, 0.5], flags=0, physicsClientId=self.id)
         p.changeVisualShape(self.cloth, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
         p.setPhysicsEngineParameter(numSubSteps=8, numSolverIterations=1, physicsClientId=self.id)
         # p.setPhysicsEngineParameter(sparseSdfVoxelSize=0.25, physicsClientId=self.id)
@@ -152,7 +158,7 @@ class DressingEnv(AssistiveEnv):
         batch_positions = []
         for i in range(100):
             batch_positions.append(np.array([100, 100+i, 100]))
-        self.points = self.create_spheres(radius=0.01, mass=0, batch_positions=batch_positions, visual=True, collision=False, rgba=[1, 1, 1, 1])
+        self.points = self.create_spheres(radius=0.01/2, mass=0, batch_positions=batch_positions, visual=True, collision=False, rgba=[1, 1, 1, 1])
 
         if not self.robot.mobile:
             self.robot.set_gravity(0, 0, 0)
