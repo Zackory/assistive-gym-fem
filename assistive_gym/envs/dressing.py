@@ -10,13 +10,10 @@ class DressingEnv(AssistiveEnv):
         super(DressingEnv, self).__init__(robot=robot, human=human, task='dressing', obs_robot_len=(17 + len(robot.controllable_joint_indices) - (len(robot.wheel_joint_indices) if robot.mobile else 0)), obs_human_len=(18 + len(human.controllable_joint_indices)), frame_skip=1, time_step=0.01)
 
     def step(self, action):
-        # self.take_step(np.zeros(7))
-        # self.take_step(np.array([0, -1, 0, 0, 0, 0, 0]))
-        # self.take_step(action)
-
         pos, orient = self.cloth_attachment.get_base_pos_orient()
         self.cloth_attachment.set_base_pos_orient(pos + np.array([0, 0.002, 0]), orient)
 
+        # NOTE: When the cloth is attached to the robot end effector, use this to move the end effector
         # pos, orient = self.robot.get_pos_orient(self.robot.left_end_effector)
         # pos[0] = self.start_pos[0]
         # pos[-1] = self.start_pos[-1]
@@ -29,6 +26,8 @@ class DressingEnv(AssistiveEnv):
 
 
         # Get cloth data
+        # NOTE: Uncomment this to visualize contact points between the cloth and the human body
+        '''
         x, y, z, cx, cy, cz, fx, fy, fz = p.getSoftBodyData(self.cloth, physicsClientId=self.id)
         mesh_points = np.concatenate([np.expand_dims(x, axis=-1), np.expand_dims(y, axis=-1), np.expand_dims(z, axis=-1)], axis=-1)
         forces = np.concatenate([np.expand_dims(fx, axis=-1), np.expand_dims(fy, axis=-1), np.expand_dims(fz, axis=-1)], axis=-1) * 10
@@ -51,6 +50,7 @@ class DressingEnv(AssistiveEnv):
         self.time = time.time()
         for j in range(i, len(self.points)):
             self.points[j].set_base_pos_orient([100, 100+j, 100], [0, 0, 0, 1])
+        '''
 
         # print(self.robot.get_force_torque_sensor(self.robot.left_end_effector-1)[:3])
 
@@ -95,17 +95,10 @@ class DressingEnv(AssistiveEnv):
 
 
 
-
         # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'hospitalgown_reduced_2000tri.obj'), scale=1.4, mass=0.16, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=10, springDampingStiffness=0.1, springDampingAllDirections=0, springBendingStiffness=0.1, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
-        # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'hospitalgown_reduced_660v.obj'), scale=1.4, mass=0.16, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.5, springDampingAllDirections=0, springBendingStiffness=0.01, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
 
         # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'hospitalgown_reduced_660v.obj'), scale=1.4, mass=0.16, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.5, springDampingAllDirections=0, springBendingStiffness=0.01, useNeoHookean=1, NeoHookeanMu=180, NeoHookeanLambda=600, NeoHookeanDamping=0.01, repulsionStiffness=800, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
-        # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'hospitalgown_reduced_2000tri.obj'), scale=1.4, mass=0.16, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=1.0, springDampingAllDirections=0, springBendingStiffness=0.01, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
 
-        # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'sleeve_585v.obj'), scale=1.0, mass=0.1, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=100, springDampingStiffness=0.1, springDampingAllDirections=0, springBendingStiffness=1, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
-        # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'sleeve_585v.obj'), scale=0.75, mass=0.1, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=100, springDampingStiffness=0.1, springDampingAllDirections=0, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
-
-        # self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'sleeve_585v.obj'), scale=0.75, mass=0.1, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=10, springDampingStiffness=1, springDampingAllDirections=0, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
         self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'sleeve_585v.obj'), scale=0.75, mass=0.1, useNeoHookean=0, useBendingSprings=1, useMassSpring=1, springElasticStiffness=100, springDampingStiffness=0.1, springDampingAllDirections=0, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
 
         # texture = p.loadTexture(os.path.join(self.directory, 'clothing', 'textures', 'fabric.jpg'), physicsClientId=self.id)
@@ -115,14 +108,7 @@ class DressingEnv(AssistiveEnv):
         p.changeVisualShape(self.cloth, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
         p.setPhysicsEngineParameter(numSubSteps=8, numSolverIterations=1, physicsClientId=self.id)
         # p.setPhysicsEngineParameter(sparseSdfVoxelSize=0.25, physicsClientId=self.id)
-        # p.clothParams(self.cloth, kLST=0.055, kAST=1.0, kVST=0.5, kDP=0.01, kDG=10, kDF=0.39, kCHR=1.0, kKHR=1.0, kAHR=1.0, piterations=5, physicsClientId=self.id)
-        # p.clothParams(self.cloth, kDP=0.01, kDG=10, physicsClientId=self.id)
-        # p.clothParams(self.cloth, kDG=1, physicsClientId=self.id)
 
-        # vertex_index = 80 # 866, 649, 1141, 1070
-        # Triangle1: 1091, 721, 369
-        # Triangle2: 521, 983, 44
-        # vertex_index = 1 # 525, 581
         vertex_index = 576 # 483, 484, 575, 577, 476, 560, 467, 468
 
         # Move cloth grasping vertex into robot end effector
@@ -134,6 +120,7 @@ class DressingEnv(AssistiveEnv):
         data = p.getMeshData(self.cloth, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
         new_vertex_position = np.array(data[1][vertex_index])
 
+        # NOTE: Create anchors between cloth and robot end effector
         # p.createSoftBodyAnchor(self.cloth, vertex_index, self.robot.body, self.robot.left_end_effector, [0, 0, 0], physicsClientId=self.id)
         # # for i in [866, 649, 1141, 1070]:
         # for i in [525, 581]:
@@ -142,8 +129,6 @@ class DressingEnv(AssistiveEnv):
 
         self.cloth_attachment = self.create_sphere(radius=0.02, mass=0, pos=new_vertex_position, visual=True, collision=False, rgba=[0, 0, 0, 1], maximal_coordinates=False)
         p.createSoftBodyAnchor(self.cloth, vertex_index, self.cloth_attachment.body, -1, [0, 0, 0], physicsClientId=self.id)
-        # for i in [866, 649, 1141, 1070]:
-        # for i in [525, 581]:
         for i in [483, 484, 575, 577, 476, 560, 467, 468]:
             pos_diff = np.array(data[1][i]) - new_vertex_position
             p.createSoftBodyAnchor(self.cloth, i, self.cloth_attachment.body, -1, pos_diff, physicsClientId=self.id)
@@ -155,10 +140,13 @@ class DressingEnv(AssistiveEnv):
             p.setCollisionFilterPair(self.robot.body, self.cloth, i, -1, 0, physicsClientId=self.id)
         p.setCollisionFilterPair(self.furniture.body, self.cloth, -1, -1, 0, physicsClientId=self.id)
 
+        # NOTE: Uncomment this to visualize contact points between cloth and human body. Uncomment code in step() function too.
+        '''
         batch_positions = []
         for i in range(100):
             batch_positions.append(np.array([100, 100+i, 100]))
         self.points = self.create_spheres(radius=0.01/2, mass=0, batch_positions=batch_positions, visual=True, collision=False, rgba=[1, 1, 1, 1])
+        '''
 
         if not self.robot.mobile:
             self.robot.set_gravity(0, 0, 0)
@@ -169,10 +157,8 @@ class DressingEnv(AssistiveEnv):
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
 
         # Wait for the cloth to settle
-        # p.setGravity(0, 0, -1, physicsClientId=self.id)
         for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
-        # p.setGravity(0, 0, -9.81, physicsClientId=self.id)
         print('Settled')
 
         self.time = time.time()
