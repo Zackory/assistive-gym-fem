@@ -16,7 +16,12 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
         config['lambda'] = 0.95
         config['model']['fcnet_hiddens'] = [100, 100]
     elif algo == 'sac':
+        # NOTE: pip3 install tensorflow_probability
         config = sac.DEFAULT_CONFIG.copy()
+        config['timesteps_per_iteration'] = 400
+        config['learning_starts'] = 1000
+        config['Q_model']['fcnet_hiddens'] = [100, 100]
+        config['policy_model']['fcnet_hiddens'] = [100, 100]
     config['num_workers'] = num_processes
     config['num_cpus_per_worker'] = 0
     config['seed'] = seed
