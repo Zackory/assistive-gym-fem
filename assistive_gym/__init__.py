@@ -37,3 +37,8 @@ register(
     max_episode_steps=1000000,
 )
 
+register(
+    id='DepthPose-v1',
+    entry_point='assistive_gym.envs:DepthPoseEnv',
+    max_episode_steps=1000000,
+)

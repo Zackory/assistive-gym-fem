@@ -9,4 +9,5 @@ from assistive_gym.envs.arm_manipulation_envs import ArmManipulationPR2Env, ArmM
 from assistive_gym.envs.human_testing import HumanTestingEnv
 from assistive_gym.envs.smplx_testing import SMPLXTestingEnv
 from assistive_gym.envs.view_cloth_vertices import ViewClothVerticesEnv
+from assistive_gym.envs.depth_pose import DepthPoseEnv
 
