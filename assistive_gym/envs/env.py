@@ -89,15 +89,15 @@ class AssistiveEnv(gym.Env):
         p.disconnect(self.id)
 
     def reset(self):
+        # if not self.gui:
+        #     # Reconnect the physics engine to forcefully clear memory when running long training scripts
+        #     self.disconnect()
+        #     self.id = p.connect(p.DIRECT)
+        #     self.util = Util(self.id, self.np_random)
         if self.task == 'dressing':
             p.resetSimulation(p.RESET_USE_DEFORMABLE_WORLD, physicsClientId=self.id)
         else:
             p.resetSimulation(physicsClientId=self.id)
-        if not self.gui:
-            # Reconnect the physics engine to forcefully clear memory when running long training scripts
-            self.disconnect()
-            self.id = p.connect(p.DIRECT)
-            self.util = Util(self.id, self.np_random)
         if self.gpu:
             self.util.enable_gpu()
         # Configure camera position

@@ -9,17 +9,16 @@ class DressingEnv(AssistiveEnv):
     def __init__(self, robot, human):
         super(DressingEnv, self).__init__(robot=robot, human=human, task='dressing', obs_robot_len=(16 + len(robot.controllable_joint_indices) - (len(robot.wheel_joint_indices) if robot.mobile else 0)), obs_human_len=(16 + len(human.controllable_joint_indices)), frame_skip=5, time_step=0.02)
 
-        # 10 skip, 0.01 step, 8 substep # 3.5 FPS
-        # 5 skip, 0.02 step, 12 substep # 3.5 FPS
-        # 1 skip, 0.1 step, 50 substep, springElasticStiffness=100 # 5 FPS
-        # 1 skip, 0.1 step, 20 substep, springElasticStiffness=10 # 12 FPS
-        # 5 skip, 0.02 step, 4 substep, springElasticStiffness=10 # 12.5 FPS
+        # 1 skip, 0.1 step, 50 substep, springElasticStiffness=100 # ? FPS
+        # 1 skip, 0.1 step, 20 substep, springElasticStiffness=10 # 4.75 FPS
+        # 5 skip, 0.02 step, 4 substep, springElasticStiffness=5 # 5.75 FPS
+        # 10 skip, 0.01 step, 2 substep, springElasticStiffness=5 # 4.5 FPS
 
     def step(self, action):
         if self.human.controllable:
             action = np.concatenate([action['robot'], action['human']])
         # action = -np.ones(7)
-        self.take_step(action, action_multiplier=0.01)
+        self.take_step(action, action_multiplier=0.003)
 
         shoulder_pos = self.human.get_pos_orient(self.human.left_shoulder)[0]
         elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
@@ -48,8 +47,7 @@ class DressingEnv(AssistiveEnv):
         else:
             reward_dressing = -distance_to_hand
 
-        # reward = self.config('dressing_reward_weight')*reward_dressing + self.config('action_weight')*reward_action
-        reward = reward_dressing
+        reward = self.config('dressing_reward_weight')*reward_dressing + self.config('action_weight')*reward_action
 
         # end_effector_pos, end_effector_orient = self.robot.get_pos_orient(self.robot.left_end_effector)
         # elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
@@ -116,7 +114,7 @@ class DressingEnv(AssistiveEnv):
             self.robot.set_base_pos_orient(wheelchair_pos + np.array(self.robot.toc_base_pos_offset[self.task]), [0, 0, np.pi/2.0])
 
         # Update robot and human motor gains
-        self.robot.motor_gains = 0.025
+        self.robot.motor_gains = 0.05
         self.robot.motor_forces = 100.0
 
         joints_positions = [(self.human.j_right_elbow, -90), (self.human.j_left_shoulder_x, -80), (self.human.j_left_elbow, -90), (self.human.j_right_hip_x, -90), (self.human.j_right_knee, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee, 80)]
@@ -191,7 +189,7 @@ class DressingEnv(AssistiveEnv):
         # Wait for the cloth to settle
         for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
-        print('Settled')
+        # print('Settled')
 
         self.time = time.time()
         self.init_env_variables()
