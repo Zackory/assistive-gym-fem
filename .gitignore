@@ -8,7 +8,7 @@ __pycache__/
 *.out
 assistive_gym/envs/assets/smpl_models/smplx/
 assistive_gym/envs/assets/smpl_models/human_params/
-trained_models/ppo
+trained_models*
 *.json
 
 # C extensions

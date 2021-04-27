@@ -25,7 +25,6 @@ class DressingEnv(AssistiveEnv):
         elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
         wrist_pos = self.human.get_pos_orient(self.human.left_wrist)[0]
 
-        '''
         # Get cloth data
         x, y, z, cx, cy, cz, fx, fy, fz = p.getSoftBodyData(self.cloth, physicsClientId=self.id)
         mesh_points = np.concatenate([np.expand_dims(x, axis=-1), np.expand_dims(y, axis=-1), np.expand_dims(z, axis=-1)], axis=-1)
@@ -49,13 +48,13 @@ class DressingEnv(AssistiveEnv):
         else:
             reward_dressing = -distance_to_hand
 
-        reward = self.config('dressing_reward_weight')*reward_dressing + self.config('action_weight')*reward_action
-        '''
-
-        end_effector_pos, end_effector_orient = self.robot.get_pos_orient(self.robot.left_end_effector)
-        elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
-        reward_dressing = -np.linalg.norm(end_effector_pos - elbow_pos)
+        # reward = self.config('dressing_reward_weight')*reward_dressing + self.config('action_weight')*reward_action
         reward = reward_dressing
+
+        # end_effector_pos, end_effector_orient = self.robot.get_pos_orient(self.robot.left_end_effector)
+        # elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
+        # reward_dressing = -np.linalg.norm(end_effector_pos - elbow_pos)
+        # reward = reward_dressing
 
         obs = self._get_obs()
 
@@ -144,7 +143,6 @@ class DressingEnv(AssistiveEnv):
         self.robot.set_joint_angles(self.robot.controllable_joint_indices, joint_angles)
 
 
-        '''
         # self.cloth_attachment = self.create_sphere(radius=0.02, mass=0, pos=[0.4, -0.35, 1.05], visual=True, collision=False, rgba=[0, 0, 0, 1], maximal_coordinates=False)
         self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'gown_696v.obj'), scale=1.0, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=5, springDampingStiffness=0.01, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.0001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
         p.changeVisualShape(self.cloth, -1, rgbaColor=[1, 1, 1, 0.5], flags=0, physicsClientId=self.id)
@@ -179,9 +177,8 @@ class DressingEnv(AssistiveEnv):
             p.setCollisionFilterPair(self.robot.body, self.cloth, i, -1, 0, physicsClientId=self.id)
         p.setCollisionFilterPair(self.furniture.body, self.cloth, -1, -1, 0, physicsClientId=self.id)
         # Disable collision between chair and human
-        # for i in [-1] + self.human.all_joint_indices:
-        #     p.setCollisionFilterPair(self.human.body, self.furniture.body, i, -1, 0, physicsClientId=self.id)
-        '''
+        for i in [-1] + self.human.all_joint_indices:
+            p.setCollisionFilterPair(self.human.body, self.furniture.body, i, -1, 0, physicsClientId=self.id)
 
         if not self.robot.mobile:
             self.robot.set_gravity(0, 0, 0)
