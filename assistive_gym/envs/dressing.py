@@ -19,7 +19,7 @@ class DressingEnv(AssistiveEnv):
         if self.human.controllable:
             action = np.concatenate([action['robot'], action['human']])
         # action = -np.ones(7)
-        self.take_step(action, action_multiplier=0.003)
+        self.take_step(action, action_multiplier=0.01)
 
         shoulder_pos = self.human.get_pos_orient(self.human.left_shoulder)[0]
         elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
@@ -116,7 +116,7 @@ class DressingEnv(AssistiveEnv):
             self.robot.set_base_pos_orient(wheelchair_pos + np.array(self.robot.toc_base_pos_offset[self.task]), [0, 0, np.pi/2.0])
 
         # Update robot and human motor gains
-        self.robot.motor_gains = 0.05
+        self.robot.motor_gains = 0.025
         self.robot.motor_forces = 100.0
 
         joints_positions = [(self.human.j_right_elbow, -90), (self.human.j_left_shoulder_x, -80), (self.human.j_left_elbow, -90), (self.human.j_right_hip_x, -90), (self.human.j_right_knee, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee, 80)]
