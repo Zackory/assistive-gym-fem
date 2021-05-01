@@ -142,10 +142,10 @@ class DressingEnv(AssistiveEnv):
 
 
         # self.cloth_attachment = self.create_sphere(radius=0.02, mass=0, pos=[0.4, -0.35, 1.05], visual=True, collision=False, rgba=[0, 0, 0, 1], maximal_coordinates=False)
-        self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'gown_696v.obj'), scale=1.0, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=5, springDampingStiffness=0.01, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.0001, frictionCoeff=0.25, useFaceContact=1, physicsClientId=self.id)
+        self.cloth = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'gown_696v.obj'), scale=1.0, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=5, springDampingStiffness=0.01, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.0001, frictionCoeff=0.1, useFaceContact=1, physicsClientId=self.id)
         p.changeVisualShape(self.cloth, -1, rgbaColor=[1, 1, 1, 0.5], flags=0, physicsClientId=self.id)
         p.changeVisualShape(self.cloth, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
-        p.setPhysicsEngineParameter(numSubSteps=4, physicsClientId=self.id)
+        p.setPhysicsEngineParameter(numSubSteps=5, physicsClientId=self.id)
         vertex_index = 680
         anchor_vertices = [307, 300, 603, 43, 641, 571]
         self.triangle1_point_indices = [80, 439, 398]
