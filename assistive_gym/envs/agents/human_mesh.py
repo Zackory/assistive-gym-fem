@@ -72,13 +72,16 @@ class HumanMesh(Agent):
         # self.j_right_fingers_x, self.j_right_fingers_y, self.j_right_fingers_z = 66, 67, 68
 
         self.num_body_shape = 10
+        self.num_hand_shape = 6
         self.vertex_positions = None
         self.obj_verts = None
         self.joint_positions = None
         self.right_arm_vertex_indices = None
         self.bottom_index = 5574
 
-    def create_smplx_body(self, directory, id, np_random, gender='female', height=None, body_shape=None, joint_angles=[], position=[0, 0, 0], orientation=[0, 0, 0], body_pose=None):
+        self.hand_radius = self.elbow_radius = self.shoulder_radius = 0.043
+
+    def create_smplx_body(self, directory, id, np_random, gender='female', height=None, body_shape=None, joint_angles=[], position=[0, 0, 0], orientation=[0, 0, 0], body_pose=None, left_hand_pose=None, right_hand_pose=None):
         # Choose gender
         self.gender = gender
         if self.gender not in ['male', 'female']:
@@ -97,41 +100,46 @@ class HumanMesh(Agent):
         elif body_shape is None:
             betas = torch.Tensor(np_random.uniform(-1, 5, (1, self.num_body_shape)))
         else:
-            betas = torch.Tensor(body_shape)
-            # betas = torch.Tensor(np.zeros((1, 10)))
-        # betas = torch.Tensor(np.zeros((1, 10)))
+            betas = torch.Tensor([body_shape] if len(np.shape(body_shape)) < 2 else body_shape)
 
         # Set human body pose
         if body_pose is None:
             body_pose = np.zeros((1, model.NUM_BODY_JOINTS*3))
             for joint_index, angle in joint_angles:
                 body_pose[0, joint_index] = np.deg2rad(angle)
+        if left_hand_pose is not None:
+            left_hand_pose = torch.Tensor(left_hand_pose)
+        if right_hand_pose is not None:
+            right_hand_pose = torch.Tensor(right_hand_pose)
 
         # Generate standing human mesh and determine default height of the mesh
-        output = model(betas=betas, body_pose=torch.Tensor(np.zeros((1, model.NUM_BODY_JOINTS*3))), return_verts=True)
-        vertices = output.vertices.detach().cpu().numpy().squeeze()
-        out_mesh = trimesh.Trimesh(vertices, model.faces)
-        rot = trimesh.transformations.rotation_matrix(np.deg2rad(90), [1, 0, 0])
-        out_mesh.apply_transform(rot)
+        # output = model(betas=betas, body_pose=torch.Tensor(np.zeros((1, model.NUM_BODY_JOINTS*3))), return_verts=True)
+        # vertices = output.vertices.detach().cpu().numpy().squeeze()
+        # out_mesh = trimesh.Trimesh(vertices, model.faces)
+        # rot = trimesh.transformations.rotation_matrix(np.deg2rad(90), [1, 0, 0])
+        # out_mesh.apply_transform(rot)
         # Find indices for right arm vertices and save to file
         # self.vert_indices = np.where(np.logical_and(np.logical_and(vertices[:, 0] < -0.17, vertices[:, 1] > -0.1), vertices[:, 0] > -0.64))
         # self.vert_indices = np.where(np.logical_and(np.logical_and(np.logical_and(np.logical_and(vertices[:, 1] > -0.4, vertices[:, 1] < -0.37), vertices[:, 0] < 0.02), vertices[:, 0] > -0.02), vertices[:, 2] < 0))
         # np.savetxt('right_arm_vertex_indices.csv', self.vert_indices, delimiter=',', fm1='%d')
 
         # Generate human mesh with correct height scaling
-        height_scale = height/out_mesh.extents[-1] if height is not None else 1.0
+        # height_scale = height/out_mesh.extents[-1] if height is not None else 1.0
         # print('Scale:', height_scale, '=', height, '/', out_mesh.extents[-1])
-        output = model(betas=betas, body_pose=torch.Tensor(body_pose), return_verts=True)
+        output = model(betas=betas, body_pose=torch.Tensor(body_pose), left_hand_pose=left_hand_pose, right_hand_pose=right_hand_pose, return_verts=True)
         vertices = output.vertices.detach().cpu().numpy().squeeze()
         joints = output.joints.detach().cpu().numpy().squeeze()
         # Scale vertices and rotate
         orient_quat = p.getQuaternionFromEuler(orientation, physicsClientId=id)
-        vertices = vertices*height_scale
+        # vertices = vertices*height_scale
         vertices = vertices.dot(R.from_euler('x', -90, degrees=True).as_matrix())
         vertices = vertices.dot(R.from_quat(orient_quat).as_matrix())
-        joints = joints*height_scale
+        # offset = -vertices[self.bottom_index]
+        # vertices += offset
+        # joints = joints*height_scale
         joints = joints.dot(R.from_euler('x', -90, degrees=True).as_matrix())
         joints = joints.dot(R.from_quat(orient_quat).as_matrix())
+        # joints += offset
         out_mesh = trimesh.Trimesh(vertices, model.faces)
         # scale = trimesh.transformations.scale_matrix(height_scale, [0, 0, 0])
         # out_mesh.apply_transform(scale)
@@ -140,10 +148,10 @@ class HumanMesh(Agent):
 
         return out_mesh, vertices, joints
 
-    def init(self, directory, id, np_random, gender='female', height=None, body_shape=None, joint_angles=[], position=[0, 0, 0], orientation=[0, 0, 0], skin_color='random', specular_color=[0.1, 0.1, 0.1], body_pose=None, out_mesh=None, vertices=None, joints=None):
+    def init(self, directory, id, np_random, gender='female', height=None, body_shape=None, joint_angles=[], position=[0, 0, 0], orientation=[0, 0, 0], skin_color='random', specular_color=[0.1, 0.1, 0.1], body_pose=None, out_mesh=None, vertices=None, joints=None, left_hand_pose=None, right_hand_pose=None):
         if out_mesh is None:
             # Create mesh
-            out_mesh, vertices, joints = self.create_smplx_body(directory, id, np_random, gender, height, body_shape, joint_angles, position, orientation, body_pose)
+            out_mesh, vertices, joints = self.create_smplx_body(directory, id, np_random, gender, height, body_shape, joint_angles, position, orientation, body_pose, left_hand_pose, right_hand_pose)
 
         model_folder = os.path.join(directory, 'smpl_models')
         self.skin_color = skin_color
@@ -157,11 +165,14 @@ class HumanMesh(Agent):
 
         # Load mesh into environment
         with tempfile.NamedTemporaryFile(suffix='.obj') as f:
-            out_mesh.export(f.name)
-            human_visual = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=f.name, meshScale=1.0, rgbaColor=self.skin_color, specularColor=specular_color, physicsClientId=id)
-            human_collision = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=f.name, meshScale=1.0, flags=p.GEOM_FORCE_CONCAVE_TRIMESH, physicsClientId=id)
-            self.body = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=human_collision, baseVisualShapeIndex=human_visual, basePosition=position, baseOrientation=[0, 0, 0, 1], useMaximalCoordinates=False, physicsClientId=id)
-            # self.body = p.createMultiBody(baseMass=0, baseVisualShapeIndex=human_visual, basePosition=position, baseOrientation=[0, 0, 0, 1], useMaximalCoordinates=False, physicsClientId=id)
+            with tempfile.NamedTemporaryFile(suffix='.obj') as f_vhacd:
+                with tempfile.NamedTemporaryFile(suffix='.txt') as f_log:
+                    out_mesh.export(f.name)
+                    p.vhacd(f.name, f_vhacd.name, f_log.name)
+                    human_visual = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=f.name, meshScale=1.0, rgbaColor=self.skin_color, specularColor=specular_color, physicsClientId=id)
+                    human_collision = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=f_vhacd.name, meshScale=1.0, physicsClientId=id)
+                    self.body = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=human_collision, baseVisualShapeIndex=human_visual, basePosition=position, baseOrientation=[0, 0, 0, 1], useMaximalCoordinates=False, physicsClientId=id)
+                    # self.body = p.createMultiBody(baseMass=0, baseVisualShapeIndex=human_visual, basePosition=position, baseOrientation=[0, 0, 0, 1], useMaximalCoordinates=False, physicsClientId=id)
 
         super(HumanMesh, self).init(self.body, id, np_random, indices=-1)
 

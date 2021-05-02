@@ -12,6 +12,10 @@ from ray.tune.registry import register_env
 
 robot_arm = 'left'
 human_controllable_joint_indices = human.left_arm_joints
+class DressingPR2MeshEnv(DressingEnv):
+    def __init__(self):
+        super(DressingPR2MeshEnv, self).__init__(robot=PR2(robot_arm), human=None)
+
 class DressingPR2Env(DressingEnv):
     def __init__(self):
         super(DressingPR2Env, self).__init__(robot=PR2(robot_arm), human=Human(human_controllable_joint_indices, controllable=False))

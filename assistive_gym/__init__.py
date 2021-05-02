@@ -20,6 +20,12 @@ for task in ['ScratchItch', 'Feeding']:
         )
 
 register(
+    id='DressingPR2Mesh-v1',
+    entry_point='assistive_gym.envs:DressingPR2MeshEnv',
+    max_episode_steps=200,
+)
+
+register(
     id='HumanTesting-v1',
     entry_point='assistive_gym.envs:HumanTestingEnv',
     max_episode_steps=200,
