@@ -20,8 +20,11 @@ class DressingEnv(AssistiveEnv):
     def step(self, action):
         if self.human.controllable:
             action = np.concatenate([action['robot'], action['human']])
-        # action = -np.ones(7)
-        self.take_step(action, action_multiplier=0.003, ik=self.use_ik)
+        action = np.ones(7)
+        if self.use_ik:
+            self.take_step(action, action_multiplier=0.01, ik=True)
+        else:
+            self.take_step(action, action_multiplier=0.003)
 
         shoulder_pos = self.human.get_pos_orient(self.human.left_shoulder)[0]
         elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
