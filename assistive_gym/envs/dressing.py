@@ -20,7 +20,7 @@ class DressingEnv(AssistiveEnv):
     def step(self, action):
         if self.human.controllable:
             action = np.concatenate([action['robot'], action['human']])
-        action = np.ones(7)
+        # action = np.ones(7)
         if self.use_ik:
             self.take_step(action, action_multiplier=0.01, ik=True)
         else:
