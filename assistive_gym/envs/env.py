@@ -174,7 +174,7 @@ class AssistiveEnv(gym.Env):
         self.update_action_space()
         return self.robot
 
-    def take_step(self, actions, gains=None, forces=None, action_multiplier=0.05, step_sim=True):
+    def take_step(self, actions, gains=None, forces=None, action_multiplier=0.05, step_sim=True, ik=False):
         if gains is None:
             gains = [a.motor_gains for a in self.agents]
         elif type(gains) not in (list, tuple):
@@ -193,7 +193,10 @@ class AssistiveEnv(gym.Env):
         for i, agent in enumerate(self.agents):
             needs_action = not isinstance(agent, Human) or agent.controllable
             if needs_action:
-                agent_action_len = len(agent.controllable_joint_indices)
+                if not ik or isinstance(agent, Human):
+                    agent_action_len = len(agent.controllable_joint_indices)
+                else:
+                    agent_action_len = 3 + 4 # 3 positon, 4 quaternion
                 action = np.copy(actions[action_index:action_index+agent_action_len])
                 action_index += agent_action_len
                 if isinstance(agent, Robot):
@@ -203,21 +206,37 @@ class AssistiveEnv(gym.Env):
                     exit()
             # Append the new action to the current measured joint angles
             agent_joint_angles = agent.get_joint_angles(agent.controllable_joint_indices)
-            # Update the target robot/human joint angles based on the proposed action and joint limits
-            for _ in range(self.frame_skip):
-                if needs_action:
-                    below_lower_limits = agent_joint_angles + action < agent.controllable_joint_lower_limits
-                    above_upper_limits = agent_joint_angles + action > agent.controllable_joint_upper_limits
-                    action[below_lower_limits] = 0
-                    action[above_upper_limits] = 0
-                    agent_joint_angles[below_lower_limits] = agent.controllable_joint_lower_limits[below_lower_limits]
-                    agent_joint_angles[above_upper_limits] = agent.controllable_joint_upper_limits[above_upper_limits]
-                if isinstance(agent, Human) and agent.impairment == 'tremor':
+            if not ik or isinstance(agent, Human):
+                # Update the target robot/human joint angles based on the proposed action and joint limits
+                for _ in range(self.frame_skip):
                     if needs_action:
-                        agent.target_joint_angles += action
-                    agent_joint_angles = agent.target_joint_angles + agent.tremors * (1 if self.iteration % 2 == 0 else -1)
-                else:
-                    agent_joint_angles += action
+                        below_lower_limits = agent_joint_angles + action < agent.controllable_joint_lower_limits
+                        above_upper_limits = agent_joint_angles + action > agent.controllable_joint_upper_limits
+                        action[below_lower_limits] = 0
+                        action[above_upper_limits] = 0
+                        agent_joint_angles[below_lower_limits] = agent.controllable_joint_lower_limits[below_lower_limits]
+                        agent_joint_angles[above_upper_limits] = agent.controllable_joint_upper_limits[above_upper_limits]
+                    if isinstance(agent, Human) and agent.impairment == 'tremor':
+                        if needs_action:
+                            agent.target_joint_angles += action
+                        agent_joint_angles = agent.target_joint_angles + agent.tremors * (1 if self.iteration % 2 == 0 else -1)
+                    else:
+                        agent_joint_angles += action
+            else:
+                joint = agent.right_end_effector if 'right' in agent.controllable_joints else agent.left_end_effector
+                ik_indices = agent.right_arm_ik_indices if 'right' in agent.controllable_joints else agent.left_arm_ik_indices
+                # NOTE: Adding action to current pose can cause drift over time
+                pos, orient = agent.get_pos_orient(joint)
+                # NOTE: Adding action to target pose can cause large targets far outside of the robot's work space that take a long time to come back from
+                # pos, orient = np.copy(agent.target_ee_position), np.copy(agent.target_ee_orientation)
+                # print('Reached pos:', pos, 'Reached orient:', orient)
+                # print('Reached pos:', pos, 'Reached orient:', self.get_euler(orient))
+                pos += action[:len(pos)]
+                orient += action[len(pos):]
+                # orient = self.get_quaternion(self.get_euler(orient) + action[len(pos):len(pos)+3]) # NOTE: RPY
+                # print('Target pos:', pos, 'Target orient:', orient)
+                # print('Target pos:', pos, 'Target orient:', self.get_euler(orient) + action[len(pos):len(pos)+3])
+                agent_joint_angles = agent.ik(joint, pos, orient, ik_indices, max_iterations=200, use_current_as_rest=True)
             if isinstance(agent, Robot) and agent.action_duplication is not None:
                 agent_joint_angles = np.concatenate([[a]*d for a, d in zip(agent_joint_angles, self.robot.action_duplication)])
                 agent.control(agent.all_controllable_joints, agent_joint_angles, agent.gains, agent.forces)

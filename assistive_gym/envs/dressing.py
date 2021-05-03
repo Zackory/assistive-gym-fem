@@ -7,8 +7,9 @@ from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
 
 class DressingEnv(AssistiveEnv):
-    def __init__(self, robot, human):
+    def __init__(self, robot, human, use_ik=False):
         super(DressingEnv, self).__init__(robot=robot, human=human, task='dressing', obs_robot_len=(16 + len(robot.controllable_joint_indices) - (len(robot.wheel_joint_indices) if robot.mobile else 0)), obs_human_len=(16 + (len(human.controllable_joint_indices) if human is not None else 0)), frame_skip=5, time_step=0.02)
+        self.use_ik = use_ik
 
         # 1 skip, 0.1 step, 50 substep, springElasticStiffness=100 # ? FPS
         # 1 skip, 0.1 step, 20 substep, springElasticStiffness=10 # 4.75 FPS
@@ -19,7 +20,7 @@ class DressingEnv(AssistiveEnv):
         if self.human.controllable:
             action = np.concatenate([action['robot'], action['human']])
         # action = -np.ones(7)
-        self.take_step(action, action_multiplier=0.003)
+        self.take_step(action, action_multiplier=0.003, ik=self.use_ik)
 
         shoulder_pos = self.human.get_pos_orient(self.human.left_shoulder)[0]
         elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
@@ -122,7 +123,8 @@ class DressingEnv(AssistiveEnv):
             self.human = HumanMesh()
             joints_positions = [(self.human.j_right_shoulder_z, 60), (self.human.j_right_elbow_y, 90), (self.human.j_left_shoulder_z, -10), (self.human.j_left_elbow_y, -90), (self.human.j_right_hip_x, -90), (self.human.j_right_knee_x, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee_x, 80)]
             body_shape = np.zeros((1, 10))
-            self.human.init(self.directory, self.id, self.np_random, gender='random', height=None, body_shape=body_shape, joint_angles=joints_positions, left_hand_pose=[[-2, 0, 0, -2, 0, 0]])
+            gender = 'female' # 'random'
+            self.human.init(self.directory, self.id, self.np_random, gender=gender, height=None, body_shape=body_shape, joint_angles=joints_positions, left_hand_pose=[[-2, 0, 0, -2, 0, 0]])
 
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])

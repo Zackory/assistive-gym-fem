@@ -24,6 +24,18 @@ register(
     entry_point='assistive_gym.envs:DressingPR2MeshEnv',
     max_episode_steps=200,
 )
+register(
+    id='DressingPR2IKMesh-v1',
+    entry_point='assistive_gym.envs:DressingPR2IKMeshEnv',
+    max_episode_steps=200,
+)
+register(
+    id='DressingPR2IK-v1',
+    entry_point='assistive_gym.envs:DressingPR2IKEnv',
+    max_episode_steps=200,
+)
+
+
 
 register(
     id='HumanTesting-v1',
