@@ -10,6 +10,7 @@ class DressingEnv(AssistiveEnv):
     def __init__(self, robot, human, use_ik=False):
         super(DressingEnv, self).__init__(robot=robot, human=human, task='dressing', obs_robot_len=(16 + len(robot.controllable_joint_indices) - (len(robot.wheel_joint_indices) if robot.mobile else 0)), obs_human_len=(16 + (len(human.controllable_joint_indices) if human is not None else 0)), frame_skip=5, time_step=0.02)
         self.use_ik = use_ik
+        self.use_mesh = (human is None)
 
         # 1 skip, 0.1 step, 50 substep, springElasticStiffness=100 # ? FPS
         # 1 skip, 0.1 step, 20 substep, springElasticStiffness=10 # 4.75 FPS
@@ -114,12 +115,7 @@ class DressingEnv(AssistiveEnv):
         self.robot.motor_gains = 0.05
         self.robot.motor_forces = 100.0
 
-        if self.human is not None:
-            joints_positions = [(self.human.j_right_elbow, -90), (self.human.j_left_shoulder_x, -80), (self.human.j_left_elbow, -90), (self.human.j_right_hip_x, -90), (self.human.j_right_knee, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee, 80)]
-            self.human.set_joint_angles([j for j, _ in joints_positions], [np.deg2rad(j_angle) for _, j_angle in joints_positions])
-            self.human.target_joint_angles = self.human.get_joint_angles(self.human.controllable_joint_indices)
-            self.human.control(self.human.all_joint_indices, self.human.get_joint_angles(), 0.05, 100)
-        else:
+        if self.use_mesh:
             self.human = HumanMesh()
             joints_positions = [(self.human.j_right_shoulder_z, 60), (self.human.j_right_elbow_y, 90), (self.human.j_left_shoulder_z, -10), (self.human.j_left_elbow_y, -90), (self.human.j_right_hip_x, -90), (self.human.j_right_knee_x, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee_x, 80)]
             body_shape = np.zeros((1, 10))
@@ -128,6 +124,11 @@ class DressingEnv(AssistiveEnv):
 
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])
+        else:
+            joints_positions = [(self.human.j_right_elbow, -90), (self.human.j_left_shoulder_x, -80), (self.human.j_left_elbow, -90), (self.human.j_right_hip_x, -90), (self.human.j_right_knee, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee, 80)]
+            self.human.set_joint_angles([j for j, _ in joints_positions], [np.deg2rad(j_angle) for _, j_angle in joints_positions])
+            self.human.target_joint_angles = self.human.get_joint_angles(self.human.controllable_joint_indices)
+            self.human.control(self.human.all_joint_indices, self.human.get_joint_angles(), 0.05, 100)
 
         shoulder_pos = self.human.get_pos_orient(self.human.left_shoulder)[0]
         elbow_pos = self.human.get_pos_orient(self.human.left_elbow)[0]
