@@ -8,7 +8,7 @@ for task in tasks:
         register(
             id='%s%s-v1' % (task, robot),
             entry_point='assistive_gym.envs:%s%sEnv' % (task, robot),
-            max_episode_steps=200000,
+            max_episode_steps=200,
         )
 
 for task in ['ScratchItch', 'Feeding']:
