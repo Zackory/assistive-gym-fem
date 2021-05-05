@@ -18,7 +18,7 @@ from .agents.tool import Tool
 from .agents.furniture import Furniture
 
 class AssistiveEnv(gym.Env):
-    def __init__(self, robot=None, human=None, task='', obs_robot_len=0, obs_human_len=0, time_step=0.02, frame_skip=5, render=False, gravity=-9.81, seed=1001):
+    def __init__(self, robot=None, human=None, task='', obs_robot_len=0, obs_human_len=0, time_step=0.02, frame_skip=5, render=False, gravity=-9.81, seed=1001, deformable=False):
         self.task = task
         self.time_step = time_step
         self.frame_skip = frame_skip
@@ -27,6 +27,7 @@ class AssistiveEnv(gym.Env):
         self.gui = False
         self.gpu = False
         self.view_matrix = None
+        self.deformable = deformable
         self.seed(seed)
         if render:
             self.render()
@@ -94,7 +95,7 @@ class AssistiveEnv(gym.Env):
         #     self.disconnect()
         #     self.id = p.connect(p.DIRECT)
         #     self.util = Util(self.id, self.np_random)
-        if self.task == 'dressing':
+        if self.deformable:
             p.resetSimulation(p.RESET_USE_DEFORMABLE_WORLD, physicsClientId=self.id)
         else:
             p.resetSimulation(physicsClientId=self.id)
@@ -114,7 +115,7 @@ class AssistiveEnv(gym.Env):
         self.forces = []
         self.task_success = 0
 
-    def build_assistive_env(self, furniture_type=None, fixed_human_base=True, human_impairment='random', gender='random'):
+    def build_assistive_env(self, furniture_type=None, fixed_human_base=True, human_impairment='random', gender='random', mass=None, body_shape=None):
         # Build plane, furniture, robot, human, etc. (just like world creation)
         # Load the ground plane
         plane = p.loadURDF(os.path.join(self.directory, 'plane', 'plane.urdf'), physicsClientId=self.id)
@@ -129,7 +130,7 @@ class AssistiveEnv(gym.Env):
             self.agents.append(self.robot)
         # Create human
         if self.human is not None and isinstance(self.human, Human):
-            self.human.init(self.human_creation, self.human_limits_model, fixed_human_base, human_impairment, gender, self.config, self.id, self.np_random)
+            self.human.init(self.human_creation, self.human_limits_model, fixed_human_base, human_impairment, gender, self.config, self.id, self.np_random, mass=mass, body_shape=body_shape)
             if self.human.controllable or self.human.impairment == 'tremor':
                 self.agents.append(self.human)
         # Create furniture (wheelchair, bed, or table)
@@ -375,10 +376,20 @@ class AssistiveEnv(gym.Env):
 
     def get_camera_image_depth(self, light_pos=[0, -3, 1], shadow=False, ambient=0.8, diffuse=0.3, specular=0.1):
         assert self.view_matrix is not None, 'You must call env.setup_camera() or env.setup_camera_rpy() before getting a camera image'
-        w, h, img, depth, _ = p.getCameraImage(self.camera_width, self.camera_height, self.view_matrix, self.projection_matrix, lightDirection=light_pos, shadow=shadow, lightAmbientCoeff=ambient, lightDiffuseCoeff=diffuse, lightSpecularCoeff=specular, physicsClientId=self.id)
+        w, h, img, depth, _ = p.getCameraImage(self.camera_width, self.camera_height, self.view_matrix, self.projection_matrix, lightDirection=light_pos, shadow=shadow, lightAmbientCoeff=ambient, lightDiffuseCoeff=diffuse, lightSpecularCoeff=specular, renderer=p.ER_BULLET_HARDWARE_OPENGL, physicsClientId=self.id)
         img = np.reshape(img, (h, w, 4))
         depth = np.reshape(depth, (h, w))
         return img, depth
+
+    def create_box(self, half_extents=[1, 1, 1], mass=0.0, pos=[0, 0, 0], orientation=[0, 0, 0, 1], visual=True, collision=True, rgba=[0, 1, 1, 1], maximal_coordinates=False, return_collision_visual=False):
+        box_collision = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=half_extents, physicsClientId=self.id) if collision else -1
+        box_visual = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=half_extents, rgbaColor=rgba, physicsClientId=self.id) if visual else -1
+        if return_collision_visual:
+            return box_collision, box_visual
+        body = p.createMultiBody(baseMass=mass, baseCollisionShapeIndex=box_collision, baseVisualShapeIndex=box_visual, basePosition=pos, baseOrientation=orientation, useMaximalCoordinates=maximal_coordinates, physicsClientId=self.id)
+        box = Agent()
+        box.init(body, self.id, self.np_random, indices=-1)
+        return box
 
     def create_sphere(self, radius=0.01, mass=0.0, pos=[0, 0, 0], visual=True, collision=True, rgba=[0, 1, 1, 1], maximal_coordinates=False, return_collision_visual=False):
         sphere_collision = p.createCollisionShape(shapeType=p.GEOM_SPHERE, radius=radius, physicsClientId=self.id) if collision else -1

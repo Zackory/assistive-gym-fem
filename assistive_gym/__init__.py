@@ -35,6 +35,26 @@ register(
     max_episode_steps=200,
 )
 
+register(
+    id='BedPosePR2-v1',
+    entry_point='assistive_gym.envs:BedPosePR2Env',
+    max_episode_steps=200,
+)
+register(
+    id='BedPosePR2Mesh-v1',
+    entry_point='assistive_gym.envs:BedPosePR2MeshEnv',
+    max_episode_steps=200,
+)
+register(
+    id='BedPoseStretch-v1',
+    entry_point='assistive_gym.envs:BedPoseStretchEnv',
+    max_episode_steps=200,
+)
+register(
+    id='BedPoseStretchMesh-v1',
+    entry_point='assistive_gym.envs:BedPoseStretchMeshEnv',
+    max_episode_steps=200,
+)
 
 
 register(

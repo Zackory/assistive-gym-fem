@@ -8,7 +8,7 @@ from .agents.human_mesh import HumanMesh
 
 class DressingEnv(AssistiveEnv):
     def __init__(self, robot, human, use_ik=False):
-        super(DressingEnv, self).__init__(robot=robot, human=human, task='dressing', obs_robot_len=(16 + len(robot.controllable_joint_indices) - (len(robot.wheel_joint_indices) if robot.mobile else 0)), obs_human_len=(16 + (len(human.controllable_joint_indices) if human is not None else 0)), frame_skip=5, time_step=0.02)
+        super(DressingEnv, self).__init__(robot=robot, human=human, task='dressing', obs_robot_len=(16 + len(robot.controllable_joint_indices) - (len(robot.wheel_joint_indices) if robot.mobile else 0)), obs_human_len=(16 + (len(human.controllable_joint_indices) if human is not None else 0)), frame_skip=5, time_step=0.02, deformable=True)
         self.use_ik = use_ik
         self.use_mesh = (human is None)
 
