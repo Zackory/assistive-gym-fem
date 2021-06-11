@@ -16,7 +16,12 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
         config['lambda'] = 0.95
         config['model']['fcnet_hiddens'] = [100, 100]
     elif algo == 'sac':
+        # NOTE: pip3 install tensorflow_probability
         config = sac.DEFAULT_CONFIG.copy()
+        config['timesteps_per_iteration'] = 400
+        config['learning_starts'] = 1000
+        config['Q_model']['fcnet_hiddens'] = [100, 100]
+        config['policy_model']['fcnet_hiddens'] = [100, 100]
     config['num_workers'] = num_processes
     config['num_cpus_per_worker'] = 0
     config['seed'] = seed
@@ -42,10 +47,12 @@ def load_policy(env, algo, env_name, policy_path=None, coop=False, seed=0, extra
         else:
             # Find the most recent policy in the directory
             directory = os.path.join(policy_path, algo, env_name)
-            files = [int(f.split('_')[-1]) for f in glob.glob(os.path.join(directory, 'checkpoint_*'))]
+            files = [f.split('_')[-1] for f in glob.glob(os.path.join(directory, 'checkpoint_*'))]
+            files_ints = [int(f) for f in files]
             if files:
-                checkpoint_num = max(files)
-                checkpoint_path = os.path.join(directory, 'checkpoint_%d' % checkpoint_num, 'checkpoint-%d' % checkpoint_num)
+                checkpoint_max = max(files_ints)
+                checkpoint_num = files_ints.index(checkpoint_max)
+                checkpoint_path = os.path.join(directory, 'checkpoint_%s' % files[checkpoint_num], 'checkpoint-%d' % checkpoint_max)
                 agent.restore(checkpoint_path)
                 # return agent, checkpoint_path
             return agent, None

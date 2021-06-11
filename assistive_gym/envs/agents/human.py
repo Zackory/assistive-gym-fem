@@ -2,11 +2,17 @@ import numpy as np
 import pybullet as p
 from .agent import Agent
 
-right_arm_joints = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-left_arm_joints = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
-right_leg_joints = [28, 29, 30, 31, 32, 33, 34]
-left_leg_joints = [35, 36, 37, 38, 39, 40, 41]
-head_joints = [20, 21, 22, 23]
+body_joints = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+waist_joints = [0, 1, 2]
+right_arm_joints = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+left_arm_joints = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+right_leg_joints = [33, 34, 35, 36, 37, 38, 39]
+left_leg_joints = [40, 41, 42, 43, 44, 45, 46]
+head_joints = [29, 30, 31, 32]
+test_joints = [46, 39]
+
+#! added for bedding manipulaiton
+limbs = [14, 16, 24, 26, 35, 36, 39, 42, 43, 46]
 
 class Human(Agent):
     def __init__(self, controllable_joint_indices, controllable=False):
@@ -18,58 +24,81 @@ class Human(Agent):
         self.right_leg_joints = right_leg_joints
         self.left_leg_joints = left_leg_joints
         self.head_joints = head_joints
-        self.right_pecs = 2
-        self.right_shoulder = 5
-        self.right_elbow = 7
-        self.right_wrist = 9
-        self.left_pecs = 12
-        self.left_shoulder = 15
-        self.left_elbow = 17
-        self.left_wrist = 19
-        self.neck = 20
-        self.head = 23
-        self.stomach = 24
-        self.waist = 27
-        self.right_hip = 30
-        self.right_knee = 31
-        self.right_ankle = 34
-        self.left_hip = 37
-        self.left_knee = 38
-        self.left_ankle = 41
+        self.waist = 2
+        self.chest = 5
+        self.upper_chest = 8
+        self.right_pecs = 11
+        self.right_upperarm = 14
+        self.right_forearm = 16
+        self.right_hand = 18
+        self.left_pecs = 21
+        self.left_upperarm = 24
+        self.left_forearm = 26
+        self.left_hand = 28
+        self.neck = 29
+        self.head = 32
+        self.right_thigh = 35
+        self.right_shin = 36
+        self.right_foot = 39
+        self.left_thigh = 42
+        self.left_shin = 43
+        self.left_foot = 46
 
-        self.j_right_pecs_x, self.j_right_pecs_y, self.j_right_pecs_z = 0, 1, 2
-        self.j_right_shoulder_x, self.j_right_shoulder_y, self.j_right_shoulder_z = 3, 4, 5
-        self.j_right_elbow = 6
-        self.j_right_forearm = 7
-        self.j_right_wrist_x, self.j_right_wrist_y = 8, 9
-        self.j_left_pecs_x, self.j_left_pecs_y, self.j_left_pecs_z = 10, 11, 12
-        self.j_left_shoulder_x, self.j_left_shoulder_y, self.j_left_shoulder_z = 13, 14, 15
-        self.j_left_elbow = 16
-        self.j_left_forearm = 17
-        self.j_left_wrist_x, self.j_left_wrist_y = 18, 19
-        self.j_neck = 20
-        self.j_head_x, self.j_head_y, self.j_head_z = 21, 22, 23
-        self.j_waist_x, self.j_waist_y, self.j_waist_z = 25, 26, 27
-        self.j_right_hip_x, self.j_right_hip_y, self.j_right_hip_z = 28, 29, 30
-        self.j_right_knee = 31
-        self.j_right_ankle_x, self.j_right_ankle_y, self.j_right_ankle_z = 32, 33, 34
-        self.j_left_hip_x, self.j_left_hip_y, self.j_left_hip_z = 35, 36, 37
-        self.j_left_knee = 38
-        self.j_left_ankle_x, self.j_left_ankle_y, self.j_left_ankle_z = 39, 40, 41
+        self.j_waist_x, self.j_waist_y, self.j_waist_z = 0, 1, 2
+        self.j_chest_x, self.j_chest_y, self.j_chest_z = 3, 4, 5
+        self.j_upper_chest_x, self.j_upper_chest_y, self.j_upper_chest_z = 6, 7, 8
+        self.j_right_pecs_x, self.j_right_pecs_y, self.j_right_pecs_z = 9, 10, 11
+        self.j_right_shoulder_x, self.j_right_shoulder_y, self.j_right_shoulder_z = 12, 13, 14
+        self.j_right_elbow = 15
+        self.j_right_forearm = 16
+        self.j_right_wrist_x, self.j_right_wrist_y = 17, 18
+        self.j_left_pecs_x, self.j_left_pecs_y, self.j_left_pecs_z = 19, 20, 21
+        self.j_left_shoulder_x, self.j_left_shoulder_y, self.j_left_shoulder_z = 22, 23, 24
+        self.j_left_elbow = 25
+        self.j_left_forearm = 26
+        self.j_left_wrist_x, self.j_left_wrist_y = 27, 28
+        self.j_neck = 29
+        self.j_head_x, self.j_head_y, self.j_head_z = 30, 31, 32
+        self.j_right_hip_x, self.j_right_hip_y, self.j_right_hip_z = 33, 34, 35
+        self.j_right_knee = 36
+        self.j_right_ankle_x, self.j_right_ankle_y, self.j_right_ankle_z = 37, 38, 39
+        self.j_left_hip_x, self.j_left_hip_y, self.j_left_hip_z = 40, 41, 42
+        self.j_left_knee = 43
+        self.j_left_ankle_x, self.j_left_ankle_y, self.j_left_ankle_z = 44, 45, 46
 
         self.impairment = 'random'
         self.limit_scale = 1.0
-        self.strength = 1.0
         self.tremors = np.zeros(10)
         self.target_joint_angles = None
         self.hand_radius = 0.0
         self.elbow_radius = 0.0
         self.shoulder_radius = 0.0
+        self.gender = None
+        self.num_body_shape = 10
+        self.body_shape = np.zeros((1, self.num_body_shape))
 
-        self.motor_forces = 1.0
-        self.motor_gains = 0.05
+        self.upperarm_radius = 0.0
+        self.upperarm_length = 0.0
+        self.forearm_radius = 0.0
+        self.forearm_length = 0.0
+        self.pecs_offset = 0.0
 
-    def init(self, human_creation, limits_model, static_human_base, impairment, gender, config, id, np_random, mass=None, radius_scale=1.0, height_scale=1.0):
+        # #! ADDED FOR BEDDING MANIPULATION TASK
+        self.thigh_radius = 0.0
+        self.thigh_length = 0.0
+        self.human_lengths = {}
+        self.human_radii = {}
+        self.limbs = limbs
+
+
+        self.body_info = {}
+        self.limbs_need_corrections = []
+
+
+        # self.motor_forces = 1.0
+        # self.motor_gains = 0.5
+
+    def init(self, human_creation, limits_model, static_human_base, impairment, gender, config, id, np_random, mass=None, body_shape=None):
         self.limits_model = limits_model
         self.arm_previous_valid_pose = {True: None, False: None}
         # Choose gender
@@ -83,23 +112,64 @@ class Human(Agent):
             impairment = np_random.choice(['none', 'limits', 'weakness'])
         self.impairment = impairment
         self.limit_scale = 1.0 if impairment != 'limits' else np_random.uniform(0.5, 1.0)
-        self.strength = 1.0 if impairment != 'weakness' else np_random.uniform(0.25, 1.0)
+        self.motor_gains = 0.5 if impairment != 'weakness' else np_random.uniform(0.05, 0.5)
         if self.impairment != 'tremor':
             self.tremors = np.zeros(len(self.controllable_joint_indices))
         elif self.head in self.controllable_joint_indices:
-            self.tremors = np_random.uniform(np.deg2rad(-20), np.deg2rad(20), size=len(self.controllable_joint_indices))
+            self.tremors = np_random.uniform(np.deg2rad(-2.5), np.deg2rad(2.5), size=len(self.controllable_joint_indices))
         else:
             self.tremors = np_random.uniform(np.deg2rad(-10), np.deg2rad(10), size=len(self.controllable_joint_indices))
+        self.body_shape = body_shape
+        if body_shape is None:
+            # self.body_shape = np_random.uniform(-1, 5, (1, self.num_body_shape))
+            self.body_shape = np_random.uniform(0, 4, (1, self.num_body_shape))
         # Initialize human
-        self.body = human_creation.create_human(static=static_human_base, limit_scale=self.limit_scale, specular_color=[0.1, 0.1, 0.1], gender=self.gender, config=config, mass=mass, radius_scale=radius_scale, height_scale=height_scale)
+        self.body, self.head_scale, self.out_mesh, self.vertices, self.joints = human_creation.create_human(static=static_human_base, limit_scale=self.limit_scale, specular_color=[0.1, 0.1, 0.1], gender=gender, body_shape=self.body_shape)
         self.hand_radius = human_creation.hand_radius
         self.elbow_radius = human_creation.elbow_radius
         self.shoulder_radius = human_creation.shoulder_radius
 
+        self.upperarm_radius = human_creation.upperarm_radius
+        self.upperarm_length = human_creation.upperarm_length
+        self.forearm_radius = human_creation.forearm_radius
+        self.forearm_length = human_creation.forearm_length
+        self.pecs_offset = human_creation.pecs_offset
+
+        #! ADDED FOR BEDDING MANIPULATION TASK
+        #TODO clean up old code
+        self.thigh_radius = human_creation.thigh_radius
+        self.thigh_length = human_creation.thigh_length
+
+        self.human_lengths = human_creation.human_lengths
+        self.human_radii = human_creation.human_radii
+
+        self.limbs_need_corrections = [self.right_thigh, self.right_shin, self.right_foot, self.left_thigh, self.left_shin, self.left_foot]
+        self.body_info = {self.waist: human_creation.body_info['waist'],
+                          self.chest: human_creation.body_info['chest'],
+                          self.upper_chest: human_creation.body_info['upperchest'],
+                          self.right_pecs: human_creation.body_info['pecs'],
+                          self.right_upperarm: human_creation.body_info['upperarm'],
+                          self.right_forearm: human_creation.body_info['forearm'],
+                          self.right_hand: human_creation.body_info['hand'],
+                          self.left_pecs: human_creation.body_info['pecs'],
+                          self.left_upperarm: human_creation.body_info['upperarm'],
+                          self.left_forearm: human_creation.body_info['forearm'],
+                          self.left_hand: human_creation.body_info['hand'],
+                          self.neck: human_creation.body_info['neck'],
+                          self.head: human_creation.body_info['head'],
+                          self.right_thigh: (human_creation.body_info['thigh'], 0, [np.pi/60.0, 0, 0]),
+                          self.right_shin: (human_creation.body_info['shin'], 0, [np.pi/30.0, 0, 0]),
+                          self.right_foot: (human_creation.body_info['foot'], [human_creation.body_info['foot'][1]/2, human_creation.body_info['foot'][1]/2, 0], [-np.pi/2.0, 0, 0]),
+                          self.left_thigh: (human_creation.body_info['thigh'], 0, [np.pi/60.0, 0, 0]),
+                          self.left_shin: (human_creation.body_info['shin'], 0,[np.pi/30.0, np.pi/60.0, 0]),
+                          self.left_foot: (human_creation.body_info['foot'], [-human_creation.body_info['foot'][1]/2, human_creation.body_info['foot'][1]/2, 0], [-np.pi/2.0, 0, 0])}
+
+
         super(Human, self).init(self.body, id, np_random, self.controllable_joint_indices)
 
         # By default, initialize the person in the wheelchair
-        self.set_base_pos_orient([0, 0.03, 0.89 if self.gender == 'male' else 0.86], [0, 0, 0, 1])
+        # self.set_base_pos_orient([0, 0.03, 0.64 if self.gender == 'male' else 0.62], [0, 0, 0, 1])
+        self.set_base_pos_orient([0, -0.06, 0.62 if self.gender == 'male' else 0.62], [0, 0, 0, 1])
 
     def setup_joints(self, joints_positions, use_static_joints=True, reactive_force=None, reactive_gain=0.05):
         # Set static joints
@@ -123,13 +193,13 @@ class Human(Agent):
         self.target_joint_angles = self.get_joint_angles(self.controllable_joint_indices)
         if reactive_force is not None:
             # NOTE: This runs a Position / Velocity PD controller for each joint motor on the human
-            forces = [reactive_force * self.strength] * len(self.target_joint_angles)
+            forces = [reactive_force] * len(self.target_joint_angles)
             self.control(self.controllable_joint_indices, self.target_joint_angles, reactive_gain, forces)
 
     def get_body_params():
-        body_shape = np.zeros(10)
+        # body_shape = np.zeros(10)
         joint_ranges = np.zeros(21, 2).flatten()
-        return np.concatenate([body_shape, joint_ranges])
+        return np.concatenate([self.body_shape, joint_ranges])
 
     def enforce_realistic_joint_limits(self):
         # Only enforce limits for the human arm that is moveable (if either arm is even moveable)

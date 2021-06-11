@@ -18,7 +18,7 @@ from .agents.tool import Tool
 from .agents.furniture import Furniture
 
 class AssistiveEnv(gym.Env):
-    def __init__(self, robot=None, human=None, task='', obs_robot_len=0, obs_human_len=0, time_step=0.02, frame_skip=5, render=False, gravity=-9.81, seed=1001):
+    def __init__(self, robot=None, human=None, task='', obs_robot_len=0, obs_human_len=0, time_step=0.02, frame_skip=5, render=False, gravity=-9.81, seed=1001, deformable=False):
         self.task = task
         self.time_step = time_step
         self.frame_skip = frame_skip
@@ -27,6 +27,7 @@ class AssistiveEnv(gym.Env):
         self.gui = False
         self.gpu = False
         self.view_matrix = None
+        self.deformable = deformable
         self.seed(seed)
         if render:
             self.render()
@@ -94,7 +95,7 @@ class AssistiveEnv(gym.Env):
         #     self.disconnect()
         #     self.id = p.connect(p.DIRECT)
         #     self.util = Util(self.id, self.np_random)
-        if self.task == 'dressing':
+        if self.deformable:
             p.resetSimulation(p.RESET_USE_DEFORMABLE_WORLD, physicsClientId=self.id)
         else:
             p.resetSimulation(physicsClientId=self.id)
@@ -114,7 +115,7 @@ class AssistiveEnv(gym.Env):
         self.forces = []
         self.task_success = 0
 
-    def build_assistive_env(self, furniture_type=None, fixed_human_base=True, human_impairment='random', gender='random'):
+    def build_assistive_env(self, furniture_type=None, fixed_human_base=True, human_impairment='random', gender='random', mass=None, body_shape=None):
         # Build plane, furniture, robot, human, etc. (just like world creation)
         # Load the ground plane
         plane = p.loadURDF(os.path.join(self.directory, 'plane', 'plane.urdf'), physicsClientId=self.id)
@@ -129,7 +130,7 @@ class AssistiveEnv(gym.Env):
             self.agents.append(self.robot)
         # Create human
         if self.human is not None and isinstance(self.human, Human):
-            self.human.init(self.human_creation, self.human_limits_model, fixed_human_base, human_impairment, gender, self.config, self.id, self.np_random)
+            self.human.init(self.human_creation, self.human_limits_model, fixed_human_base, human_impairment, gender, self.config, self.id, self.np_random, mass=mass, body_shape=body_shape)
             if self.human.controllable or self.human.impairment == 'tremor':
                 self.agents.append(self.human)
         # Create furniture (wheelchair, bed, or table)
@@ -174,7 +175,7 @@ class AssistiveEnv(gym.Env):
         self.update_action_space()
         return self.robot
 
-    def take_step(self, actions, gains=None, forces=None, action_multiplier=0.05, step_sim=True):
+    def take_step(self, actions, gains=None, forces=None, action_multiplier=0.05, step_sim=True, ik=False):
         if gains is None:
             gains = [a.motor_gains for a in self.agents]
         elif type(gains) not in (list, tuple):
@@ -193,7 +194,10 @@ class AssistiveEnv(gym.Env):
         for i, agent in enumerate(self.agents):
             needs_action = not isinstance(agent, Human) or agent.controllable
             if needs_action:
-                agent_action_len = len(agent.controllable_joint_indices)
+                if not ik or isinstance(agent, Human):
+                    agent_action_len = len(agent.controllable_joint_indices)
+                else:
+                    agent_action_len = 3 + 4 # 3 positon, 4 quaternion
                 action = np.copy(actions[action_index:action_index+agent_action_len])
                 action_index += agent_action_len
                 if isinstance(agent, Robot):
@@ -203,21 +207,37 @@ class AssistiveEnv(gym.Env):
                     exit()
             # Append the new action to the current measured joint angles
             agent_joint_angles = agent.get_joint_angles(agent.controllable_joint_indices)
-            # Update the target robot/human joint angles based on the proposed action and joint limits
-            for _ in range(self.frame_skip):
-                if needs_action:
-                    below_lower_limits = agent_joint_angles + action < agent.controllable_joint_lower_limits
-                    above_upper_limits = agent_joint_angles + action > agent.controllable_joint_upper_limits
-                    action[below_lower_limits] = 0
-                    action[above_upper_limits] = 0
-                    agent_joint_angles[below_lower_limits] = agent.controllable_joint_lower_limits[below_lower_limits]
-                    agent_joint_angles[above_upper_limits] = agent.controllable_joint_upper_limits[above_upper_limits]
-                if isinstance(agent, Human) and agent.impairment == 'tremor':
+            if not ik or isinstance(agent, Human):
+                # Update the target robot/human joint angles based on the proposed action and joint limits
+                for _ in range(self.frame_skip):
                     if needs_action:
-                        agent.target_joint_angles += action
-                    agent_joint_angles = agent.target_joint_angles + agent.tremors * (1 if self.iteration % 2 == 0 else -1)
-                else:
-                    agent_joint_angles += action
+                        below_lower_limits = agent_joint_angles + action < agent.controllable_joint_lower_limits
+                        above_upper_limits = agent_joint_angles + action > agent.controllable_joint_upper_limits
+                        action[below_lower_limits] = 0
+                        action[above_upper_limits] = 0
+                        agent_joint_angles[below_lower_limits] = agent.controllable_joint_lower_limits[below_lower_limits]
+                        agent_joint_angles[above_upper_limits] = agent.controllable_joint_upper_limits[above_upper_limits]
+                    if isinstance(agent, Human) and agent.impairment == 'tremor':
+                        if needs_action:
+                            agent.target_joint_angles += action
+                        agent_joint_angles = agent.target_joint_angles + agent.tremors * (1 if self.iteration % 2 == 0 else -1)
+                    else:
+                        agent_joint_angles += action
+            else:
+                joint = agent.right_end_effector if 'right' in agent.controllable_joints else agent.left_end_effector
+                ik_indices = agent.right_arm_ik_indices if 'right' in agent.controllable_joints else agent.left_arm_ik_indices
+                # NOTE: Adding action to current pose can cause drift over time
+                pos, orient = agent.get_pos_orient(joint)
+                # NOTE: Adding action to target pose can cause large targets far outside of the robot's work space that take a long time to come back from
+                # pos, orient = np.copy(agent.target_ee_position), np.copy(agent.target_ee_orientation)
+                # print('Reached pos:', pos, 'Reached orient:', orient)
+                # print('Reached pos:', pos, 'Reached orient:', self.get_euler(orient))
+                pos += action[:len(pos)]
+                orient += action[len(pos):]
+                # orient = self.get_quaternion(self.get_euler(orient) + action[len(pos):len(pos)+3]) # NOTE: RPY
+                # print('Target pos:', pos, 'Target orient:', orient)
+                # print('Target pos:', pos, 'Target orient:', self.get_euler(orient) + action[len(pos):len(pos)+3])
+                agent_joint_angles = agent.ik(joint, pos, orient, ik_indices, max_iterations=200, use_current_as_rest=True)
             if isinstance(agent, Robot) and agent.action_duplication is not None:
                 agent_joint_angles = np.concatenate([[a]*d for a, d in zip(agent_joint_angles, self.robot.action_duplication)])
                 agent.control(agent.all_controllable_joints, agent_joint_angles, agent.gains, agent.forces)
@@ -296,10 +316,7 @@ class AssistiveEnv(gym.Env):
                 self.robot.randomize_init_joint_angles(self.task)
             elif self.robot.wheelchair_mounted and wheelchair_enabled:
                 # Use IK to find starting joint angles for mounted robots
-                if isinstance(self.robot, Panda):
-                    self.robot.ik_random_restarts(right=(arm == 'right'), target_pos=target_ee_pos, target_orient=target_ee_orient, max_iterations=200, max_ik_random_restarts=1000, success_threshold=0.01, step_sim=False, check_env_collisions=False, randomize_limits=True)
-                else:
-                    self.robot.ik_random_restarts(right=(arm == 'right'), target_pos=target_ee_pos, target_orient=target_ee_orient, max_iterations=1000, max_ik_random_restarts=40, success_threshold=0.01, step_sim=True, check_env_collisions=False, randomize_limits=False)
+                self.robot.ik_random_restarts(right=(arm == 'right'), target_pos=target_ee_pos, target_orient=target_ee_orient, max_iterations=1000, max_ik_random_restarts=1000, success_threshold=0.01, step_sim=False, check_env_collisions=False, randomize_limits=True, collision_objects=collision_objects)
             else:
                 # Use TOC with JLWKI to find an optimal base position for the robot near the person
                 base_position, _, _ = self.robot.position_robot_toc(self.task, arm, start_pos_orient, target_pos_orients, self.human, step_sim=False, check_env_collisions=False, max_ik_iterations=100, max_ik_random_restarts=1, randomize_limits=False, right_side=right_side, base_euler_orient=[0, 0, 0 if right_side else np.pi], attempts=50)
@@ -359,10 +376,20 @@ class AssistiveEnv(gym.Env):
 
     def get_camera_image_depth(self, light_pos=[0, -3, 1], shadow=False, ambient=0.8, diffuse=0.3, specular=0.1):
         assert self.view_matrix is not None, 'You must call env.setup_camera() or env.setup_camera_rpy() before getting a camera image'
-        w, h, img, depth, _ = p.getCameraImage(self.camera_width, self.camera_height, self.view_matrix, self.projection_matrix, lightDirection=light_pos, shadow=shadow, lightAmbientCoeff=ambient, lightDiffuseCoeff=diffuse, lightSpecularCoeff=specular, physicsClientId=self.id)
+        w, h, img, depth, _ = p.getCameraImage(self.camera_width, self.camera_height, self.view_matrix, self.projection_matrix, lightDirection=light_pos, shadow=shadow, lightAmbientCoeff=ambient, lightDiffuseCoeff=diffuse, lightSpecularCoeff=specular, renderer=p.ER_BULLET_HARDWARE_OPENGL, physicsClientId=self.id)
         img = np.reshape(img, (h, w, 4))
         depth = np.reshape(depth, (h, w))
         return img, depth
+
+    def create_box(self, half_extents=[1, 1, 1], mass=0.0, pos=[0, 0, 0], orientation=[0, 0, 0, 1], visual=True, collision=True, rgba=[0, 1, 1, 1], maximal_coordinates=False, return_collision_visual=False):
+        box_collision = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=half_extents, physicsClientId=self.id) if collision else -1
+        box_visual = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=half_extents, rgbaColor=rgba, physicsClientId=self.id) if visual else -1
+        if return_collision_visual:
+            return box_collision, box_visual
+        body = p.createMultiBody(baseMass=mass, baseCollisionShapeIndex=box_collision, baseVisualShapeIndex=box_visual, basePosition=pos, baseOrientation=orientation, useMaximalCoordinates=maximal_coordinates, physicsClientId=self.id)
+        box = Agent()
+        box.init(body, self.id, self.np_random, indices=-1)
+        return box
 
     def create_sphere(self, radius=0.01, mass=0.0, pos=[0, 0, 0], visual=True, collision=True, rgba=[0, 1, 1, 1], maximal_coordinates=False, return_collision_visual=False):
         sphere_collision = p.createCollisionShape(shapeType=p.GEOM_SPHERE, radius=radius, physicsClientId=self.id) if collision else -1
@@ -392,4 +419,13 @@ class AssistiveEnv(gym.Env):
         agent = Agent()
         agent.init(body, self.id, self.np_random, indices=-1)
         return agent
+    
+    def create_capsule(self, radius=0, length=0, position = [2,0,1], orientation = [0, 1, 1, 1], maximal_coordinates=False):
+        collision_shape = p.createCollisionShape(p.GEOM_CAPSULE, radius=radius, height=length, physicsClientId=self.id)
+        visual_shape = p.createVisualShape(p.GEOM_CAPSULE, radius=radius, length=length, rgbaColor=[0,0,0,1],physicsClientId=self.id)
+        mass = 0
+        body = p.createMultiBody(baseMass=mass, baseCollisionShapeIndex=collision_shape, baseVisualShapeIndex=visual_shape, basePosition=position, baseOrientation = orientation, useMaximalCoordinates=maximal_coordinates, physicsClientId=self.id)
+        capsule = Agent()
+        capsule.init(body, self.id, self.np_random, indices=-1)
+        return capsule
 

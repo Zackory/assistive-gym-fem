@@ -12,7 +12,7 @@ class FeedingEnv(AssistiveEnv):
     def step(self, action):
         if self.human.controllable:
             action = np.concatenate([action['robot'], action['human']])
-        self.take_step(action)
+        self.take_step(np.zeros(7))
 
         obs = self._get_obs()
 

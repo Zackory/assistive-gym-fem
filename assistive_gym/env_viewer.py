@@ -1,4 +1,4 @@
-import gym, sys, argparse, time
+import gym, sys, argparse
 import numpy as np
 from .learn import make_env
 # import assistive_gym
@@ -23,16 +23,17 @@ def viewer(env_name):
         action = sample_action(env, coop)
         if coop:
             print('Robot observation size:', np.shape(observation['robot']), 'Human observation size:', np.shape(observation['human']), 'Robot action size:', np.shape(action['robot']), 'Human action size:', np.shape(action['human']))
+
+        elif 'BeddingManipulationSphere-v1' in env_name:
+            action = np.array([0.3, 0.5, 0, 0])
         else:
             print('Observation size:', np.shape(observation), 'Action size:', np.shape(action))
 
-        print('Starting')
-        t = time.time()
         while not done:
-            observation, reward, done, info = env.step(sample_action(env, coop))
+            # observation, reward, done, info = env.step(sample_action(env, coop))
+            observation, reward, done, info = env.step(action)
             if coop:
                 done = done['__all__']
-        print('Runtime: %.2f s, FPS: %.2f' % (time.time() - t, 200 / (time.time() - t)))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Assistive Gym Environment Viewer')
