@@ -4,7 +4,7 @@ from .agents.stretch import Stretch
 from .agents.human import Human
 
 robot_arm = 'left'
-human_controllable_joint_indices = human.left_arm_joints
+human_controllable_joint_indices = []
 class BeddingManipulationSphereEnv(BeddingManipulationEnv):
     def __init__(self):
         super(BeddingManipulationSphereEnv, self).__init__(robot=None, human=Human(human_controllable_joint_indices, controllable=False))

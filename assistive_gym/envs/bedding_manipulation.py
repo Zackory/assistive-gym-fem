@@ -9,30 +9,32 @@ import cv2
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
 
+# python3 -m assistive_gym.learn --env "BeddingManipulationSphere-v1" --algo ppo --train --train-timesteps 500 --save-dir ./trained_models/
+
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
         if robot is None:
-            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bed_bathing', obs_robot_len=4, obs_human_len=(16 + (len(human.controllable_joint_indices) if human is not None else 0)), frame_skip=1, time_step=0.01, deformable=True)
+            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=1, obs_human_len=1, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
 
     def step(self, action):
         obs = self._get_obs()
 
-
         grasp_loc = action[0:2]
         release_loc = action[2:]
-        print(grasp_loc, release_loc)
+        # print(grasp_loc, release_loc)
 
         # move sphere to 2D grasp location, some arbitrary distance z = 1 in the air
         #! don't technically need to do this, remove later
-        self.sphere_ee.set_base_pos_orient(np.append(grasp_loc, 1), np.array([0,0,0]))
+        # self.sphere_ee.set_base_pos_orient(np.append(grasp_loc, 1), np.array([0,0,0]))
 
 
         # get points on the blanket, initial state of the cloth
         data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
-        print("got blanket data")
+        # print("got blanket data")
 
-        reward_uncover_target = self.uncover_target_reward(data)
+        # reward_uncover_target = self.uncover_target_reward(data)
+        # print("reward: ", reward_uncover_target)
         # reward_uncover_nontarget = self.uncover_nontarget_reward(data)
 
         # calculate distance between the 2D grasp location and every point on the blanket, anchor points are the 4 points on the blanket closest to the 2D grasp location
@@ -42,12 +44,12 @@ class BeddingManipulationEnv(AssistiveEnv):
             d = np.linalg.norm(v[0:2] - grasp_loc)
             dist.append(d)
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
-        for a in anchor_idx:
-            print("anchor loc: ", data[1][a])
+        # for a in anchor_idx:
+            # print("anchor loc: ", data[1][a])
 
         # update grasp_loc var with the location of the central anchor point on the cloth
         grasp_loc = np.array(data[1][anchor_idx[0]][0:2])
-        print("GRASP LOC =", grasp_loc)
+        # print("GRASP LOC =", grasp_loc)
 
         # move sphere down to the anchor point on the blanket, create anchor point (central point first, then remaining points) and store constraint ids
         self.sphere_ee.set_base_pos_orient(data[1][anchor_idx[0]], np.array([0,0,0]))
@@ -57,20 +59,21 @@ class BeddingManipulationEnv(AssistiveEnv):
         for i in anchor_idx[1:]:
             pos_diff = np.array(data[1][i]) - np.array(data[1][anchor_idx[0]])
             constraint_ids.append(p.createSoftBodyAnchor(self.blanket, i, self.sphere_ee.body, -1, [0, 0, 0]))
-        print("sphere moved to grasp loc, anchored")
+        # print("sphere moved to grasp loc, anchored")
 
 
         # move sphere up to the arbitrary z position z = 1
         current_pos = self.sphere_ee.get_base_pos_orient()[0]
         # print(current_pos[2])
-        while current_pos[2] <= 1.2:
+        delta_z = 0.5                           # distance to move up
+        final_z = delta_z + current_pos[2]      # global z position after moving up delta z
+        while current_pos[2] <= final_z:
             self.sphere_ee.set_base_pos_orient(current_pos + np.array([0, 0, 0.005]), np.array([0,0,0]))
             p.stepSimulation(physicsClientId=self.id)
             current_pos = self.sphere_ee.get_base_pos_orient()[0]
             # print(current_pos[2])
 
-        print("sphere moved to z=1.5 up")
-
+        # print(f"sphere moved {delta_z}, current z pos {current_pos[2]}")
 
 
         # move sphere to the release location, release the blanket
@@ -86,75 +89,72 @@ class BeddingManipulationEnv(AssistiveEnv):
             p.stepSimulation(physicsClientId=self.id)
             current_pos = self.sphere_ee.get_base_pos_orient()[0]
             # print("current: ", current_pos, " release: ", release_loc)
-        print("sphere moved to release loc, blanket settling")
+        # print("sphere moved to release loc, blanket settling")
 
         # continue stepping simulation to allow the cloth to settle before release
         for _ in range(20):
             p.stepSimulation(physicsClientId=self.id)
+        # print("release cloth, allow to settle")
 
-        print("release cloth, allow to settle")
+
         # release the cloth at the release point, sphere is at the same arbitrary z position in the air
         for i in constraint_ids:
             p.removeConstraint(i, physicsClientId=self.id)
         for _ in range(50):
             p.stepSimulation(physicsClientId=self.id)
-        print("done")
+        # print("done")
 
-
-        self.iteration += 1
-        done = self.iteration >= 1
 
         # get points on the blanket, final state of the cloth
         data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
 
+
         reward_uncover_target = self.uncover_target_reward(data)
+        reward = self.config('uncover_target_weight')*reward_uncover_target
         # reward_uncover_nontarget = self.uncover_nontarget_reward(data)
-
-        time.sleep(600)
-
-        reward_action = -np.linalg.norm(action)
-        reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('action_weight')*reward_action + self.config('uncover_nontarget_weight')*reward_uncover_nontarget
+        # print("reward: ", reward)
 
 
-        return obs, 0, done, {}
+        info = {}
+        self.iteration += 1
+        done = self.iteration >= 1
+
+        # time.sleep(600)
+
+
+        return obs, reward, done, info
+
+    def change_point_color(self, limb, ind, rgb = [0, 1, 0.5, 1]):
+        p.changeVisualShape(self.points_target_limb[limb][ind].body, -1, rgbaColor=rgb, flags=0, physicsClientId=self.id)
 
 
     def uncover_target_reward(self, blanket_state):
-        # get points on the blanket, final state of the cloth
-
-        # print(self.targets_pos_foot_world)
-        # print(self.targets_pos_shin_world)
-        points_still_covered = 0
-        threshold = 0.05
-
-        self.target_limbs = [self.human.right_shin, self.human.right_foot]
+        points_covered = 0
+        # uncovered_rgb = [0, 1, 0.5, 1]
+        # covered_rgb = [1, 1, 1, 1]
+        threshold = 0.028
+        total_points = self.total_target_point_count
 
         # count number of target points covered by the blanket
-        for points_pos_target_limb_world  in self.points_pos_target_limb_world.values():
-            for target_limb in points_pos_target_limb_world:
+        for limb, points_pos_target_limb_world in self.points_pos_target_limb_world.items():
+            for point in range(len(points_pos_target_limb_world)):
+                # covered = False
                 for i, v in enumerate(blanket_state[1]):
                     # target_foot = np.array(target_foot)
                     # v = np.array(v)
-                    if abs(np.linalg.norm(v[0:2]-target_limb[0:2])) < threshold:
-                        # print(np.linalg.norm(v[0:2]-target_foot[0:2]))
-                        # print(v[0:2]-target_foot[0:2])
-                        # p.addUserDebugText(text=str(i), textPosition=v, textColorRGB=[0, 0, 0], textSize=1, lifeTime=0, physicsClientId=self.id)
-                        points_still_covered += 1
+                    if abs(np.linalg.norm(v[0:2]-points_pos_target_limb_world[point][0:2])) < threshold:
+                        # covered = True
+                        points_covered += 1
                         break
-        print("total_target_points", self.total_target_point_count)
-        print("covered", points_still_covered)
+                # rgb = covered_rgb if covered else uncovered_rgb
+                # self.change_point_color(limb, point, rgb = rgb)
 
-        # count_shin = 0
-        # for target_shin in self.targets_pos_shin_world:
-        #     for i, v in enumerate(blanket_state[1]):
-        #         if abs(np.linalg.norm(v[0:2]-target_shin[0:2])) < threshold:
-        #             # p.addUserDebugText(text=str(i), textPosition=v, textColorRGB=[0, 0, 0], textSize=1, lifeTime=0, physicsClientId=self.id)
-        #             count_shin += 1
-        #             break
+        points_uncovered = total_points - points_covered
 
-        # print("total_targets, shin", len(self.targets_pos_on_shin))
-        # print("covered", count_shin)
-        return points_still_covered
+        # print("total_targets:", self.total_target_point_count)
+        # print("uncovered", points_uncovered)
+
+        return points_uncovered/total_points
 
 
     #! NEED REDO!!!
@@ -239,17 +239,6 @@ class BeddingManipulationEnv(AssistiveEnv):
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])
 
-        # r = 0.1
-        # l = 0.5
-        # self.capsule = self.create_capsule(r, l)
-        # self.targets_pos_on_cap = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -l/2]), radius=r, distance_between_points=0.03)
-        # self.targets_cap = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.targets_pos_on_cap), visual=True, collision=False, rgba=[0, 1, 1, 1])
-        # cap_pos, cap_orient = self.capsule.get_base_pos_orient()
-        # for target_pos_on_cap, target in zip(self.targets_pos_on_cap, self.targets_cap):
-        #     # target_pos = np.array(p.multiplyTransforms(foot_pos, foot_orient, target_pos_on_foot, self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)[0])
-        #     target_pos = np.array(p.multiplyTransforms(cap_pos, cap_orient, target_pos_on_cap, [0, 0, 0, 1], physicsClientId=self.id)[0])
-        #     target.set_base_pos_orient(target_pos, [0, 0, 0, 1])
-
 
         shoulder_pos = self.human.get_pos_orient(self.human.right_upperarm)[0]
         elbow_pos = self.human.get_pos_orient(self.human.right_forearm)[0]
@@ -265,7 +254,8 @@ class BeddingManipulationEnv(AssistiveEnv):
         # spawn blanket
         p.setGravity(0, 0, -9.81, physicsClientId=self.id)
 
-        self.blanket = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'blanket_2089v.obj'), scale=0.75, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.0005, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.006, frictionCoeff=2, useFaceContact=1, physicsClientId=self.id)
+        #TODO Adjust friction, should be lower so that the cloth can slide over the limbs
+        self.blanket = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'blanket_2089v.obj'), scale=0.75, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.0005, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.006, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
 
         # change alpha value so that it is a little more translucent, easier to see the relationship the human
         p.changeVisualShape(self.blanket, -1, rgbaColor=[0, 0, 1, 0.75], flags=0, physicsClientId=self.id)
@@ -276,7 +266,7 @@ class BeddingManipulationEnv(AssistiveEnv):
 
 
         # Drop the blanket on the person, allow to settle
-        for _ in range(50):
+        for _ in range(10):
             p.stepSimulation(physicsClientId=self.id)
     
         if self.robot is None:
@@ -331,12 +321,24 @@ class BeddingManipulationEnv(AssistiveEnv):
             # Define action/obs lengths
             self.action_robot_len = 4
             self.action_human_len = len(self.human.controllable_joint_indices) if self.human.controllable else 0
-            self.obs_robot_len = len(self._get_obs('robot'))    # 0
-            self.obs_human_len = len(self._get_obs('human'))    # 0
+            self.obs_robot_len = len(self._get_obs('robot'))    # 1
+            self.obs_human_len = len(self._get_obs('human'))    # 1
             self.action_space_robot = spaces.Box(low=np.array([-1.0]*self.action_robot_len, dtype=np.float32), high=np.array([1.0]*self.action_robot_len, dtype=np.float32), dtype=np.float32)
             self.action_space_human = spaces.Box(low=np.array([-1.0]*self.action_human_len, dtype=np.float32), high=np.array([1.0]*self.action_human_len, dtype=np.float32), dtype=np.float32)
             self.observation_space_robot = spaces.Box(low=np.array([-1000000000.0]*self.obs_robot_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_robot_len, dtype=np.float32), dtype=np.float32)
             self.observation_space_human = spaces.Box(low=np.array([-1000000000.0]*self.obs_human_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_human_len, dtype=np.float32), dtype=np.float32)
+
+            print(self.action_robot_len)
+            print(self.action_human_len)
+            print(self.obs_robot_len)
+            print(self.obs_human_len)
+            print(self.action_space_robot)
+            # print(self.action_space_human)
+            print(self.observation_space_robot)
+            print(self.observation_space_human)
+
+            # may be doubling action, 25*2 = 5?
+
         else:
             self.init_env_variables()
 
@@ -356,20 +358,8 @@ class BeddingManipulationEnv(AssistiveEnv):
         for limb in self.target_limbs:
             length, radius = self.human.body_info[limb] if limb not in self.human.limbs_need_corrections else self.human.body_info[limb][0]
             self.points_pos_on_target_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-            self.points_target_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_target_limb[limb]), visual=True, collision=False, rgba=[0, 1, 1, 1])
+            self.points_target_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_target_limb[limb]), visual=True, collision=False, rgba=[1, 1, 1, 1])
             self.total_target_point_count += len(self.points_pos_on_target_limb[limb])
-
-
-        # self.nontarget_limbs = list(set(self.human.limbs)-set(self.target_limbs))
-
-        # self.points_pos_on_nontarget_limb = {}
-        # self.points_nontarget_limb = {}
-        # self.total_point_count = 0
-        # for limb in self.nontarget_limbs:
-        #     length, radius = self.human.body_info[limb] if limb not in self.human.limbs_need_corrections else self.human.body_info[limb][0]
-        #     self.points_pos_on_nontarget_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-        #     self.points_nontarget_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_nontarget_limb[limb]), visual=True, collision=False, rgba=[0, 1, 1, 1])
-        #     self.total_nontarget_point_count += len(self.points_pos_on_nontarget_limb[limb])
 
         self.update_points_along_body()
     
