@@ -89,3 +89,15 @@ register(
     max_episode_steps=200,
 )
 
+register(
+    id='RemoveContactSphere-v1',
+    entry_point='assistive_gym.envs:RemoveContactSphereEnv',
+    max_episode_steps=1,
+)
+
+
+register(
+    id='HumanSMPLXTesting-v1',
+    entry_point='assistive_gym.envs:HumanSMPLXTestingEnv',
+    max_episode_steps=200,
+)
