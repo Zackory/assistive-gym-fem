@@ -117,9 +117,7 @@ class BedBathingEnv(AssistiveEnv):
         self.build_assistive_env('hospital_bed', fixed_human_base=False)
         self.furniture.set_on_ground()
 
-        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
         self.furniture.set_joint_angles([1], [np.pi/4])
-        # self.furniture.set_friction(self.furniture.base, friction=5)
         self.furniture.set_whole_body_frictions(1, 1, 1)
 
         # Setup human in the air and let them settle into a resting pose on the bed
