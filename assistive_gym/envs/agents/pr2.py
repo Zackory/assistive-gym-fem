@@ -35,7 +35,7 @@ class PR2(Robot):
         toc_base_pos_offset = {'scratch_itch': [0.1, 0, 0], # Robot base offset before TOC base pose optimization
                                'feeding': [0.1, 0.2, 0],
                                'drinking': [0.2, 0.2, 0],
-                               'bed_bathing': [-0.1, 0, 0],
+                               'bed_bathing': [-0.1, -0.3, 0],
                                'dressing': [1.7, 0.7, 0],
                                'arm_manipulation': [-0.3, 0.7, 0]}
         toc_ee_orient_rpy = {'scratch_itch': [0, 0, 0], # Initial end effector orientation

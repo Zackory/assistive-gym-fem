@@ -77,7 +77,7 @@ class Util:
         point = p1 + random_length*axis_vector + radius*np.cos(theta)*ortho_vector + radius*np.sin(theta)*normal_vector
         return point
 
-    def capsule_points(self, p1, p2, radius, distance_between_points=0.05):
+    def capsule_points(self, p1, p2, radius, distance_between_points=0.05, num_sections=None, points_per_section=None):
         '''
         Creates a set of points around a capsule.
         Check out: http://mathworld.wolfram.com/ConicalFrustum.html
@@ -97,15 +97,16 @@ class Util:
         normal_vector = np.cross(axis_vector, ortho_vector)
 
         # Determine the section positions along the frustum at which we will create point around in a circular fashion
-        sections = int(np.linalg.norm(p2 - p1) / distance_between_points)
-        section_positions = [(p2 - p1) / (sections + 1) * (i + 1) for i in range(sections)]
+        if num_sections is None:
+            num_sections = int(np.linalg.norm(p2 - p1) / distance_between_points)
+        section_positions = [(p2 - p1) / (num_sections + 1) * (i + 1) for i in range(num_sections)]
         for i, section_pos in enumerate(section_positions):
             # Determine radius and circumference of this section
             circumference = 2*np.pi*radius
             # Determine the angle difference (in radians) between points
             theta_dist = distance_between_points / radius
-            for j in range(int(circumference / distance_between_points)):
-                theta = theta_dist * j
+            for j in range(int(circumference / distance_between_points) if points_per_section is None else points_per_section):
+                theta = (theta_dist * j) if points_per_section is None else (2*np.pi*(j/points_per_section))
                 # Determine cartesian coordinates for the point along the circular section of the frustum
                 point_on_circle = p1 + section_pos + radius*np.cos(theta)*ortho_vector + radius*np.sin(theta)*normal_vector
                 points.append(point_on_circle)

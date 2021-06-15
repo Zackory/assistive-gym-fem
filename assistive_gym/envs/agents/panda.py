@@ -36,7 +36,7 @@ class Panda(Robot):
         toc_base_pos_offset = {'scratch_itch': pos, # Robot base offset before TOC base pose optimization
                                'feeding': pos,
                                'drinking': pos,
-                               'bed_bathing': [-0.05, 1.05, 0.67],
+                               'bed_bathing': [-0.05, 0.75, 0.67],
                                'dressing': [0.35, -0.35, 0.2],
                                'arm_manipulation': [-0.25, 1.15, 0.67]}
         toc_ee_orient_rpy = {'scratch_itch': [0, np.pi/2.0, 0], # Initial end effector orientation

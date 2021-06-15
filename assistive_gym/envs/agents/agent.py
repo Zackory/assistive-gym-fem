@@ -25,12 +25,15 @@ class Agent:
             self.controllable_joint_lower_limits = np.array([self.lower_limits[i] for i in self.controllable_joint_indices])
             self.controllable_joint_upper_limits = np.array([self.upper_limits[i] for i in self.controllable_joint_indices])
 
-    def control(self, indices, target_angles, gains, forces):
-        if type(gains) in [int, float]:
+    def control(self, indices, target_angles, gains, forces, velocity_control=False):
+        if type(gains) in [int, float, np.float64, np.float32]:
             gains = [gains]*len(indices)
-        if type(forces) in [int, float]:
+        if type(forces) in [int, float, np.float64, np.float32]:
             forces = [forces]*len(indices)
-        p.setJointMotorControlArray(self.body, jointIndices=indices, controlMode=p.POSITION_CONTROL, targetPositions=target_angles, positionGains=gains, forces=forces, physicsClientId=self.id)
+        if not velocity_control:
+            p.setJointMotorControlArray(self.body, jointIndices=indices, controlMode=p.POSITION_CONTROL, targetPositions=target_angles, positionGains=gains, forces=forces, physicsClientId=self.id)
+        else:
+            p.setJointMotorControlArray(self.body, jointIndices=indices, controlMode=p.VELOCITY_CONTROL, targetVelocities=target_angles, velocityGains=gains, forces=forces, physicsClientId=self.id)
 
     def get_joint_angles(self, indices=None):
         if indices is None:
@@ -39,6 +42,14 @@ class Agent:
             return []
         robot_joint_states = p.getJointStates(self.body, jointIndices=indices, physicsClientId=self.id)
         return np.array([x[0] for x in robot_joint_states])
+
+    def get_joint_velocities(self, indices=None):
+        if indices is None:
+            indices = self.all_joint_indices
+        elif not indices:
+            return []
+        robot_joint_states = p.getJointStates(self.body, jointIndices=indices, physicsClientId=self.id)
+        return np.array([x[1] for x in robot_joint_states])
 
     def get_joint_angles_dict(self, indices=None):
         return {j: a for j, a in zip(indices, self.get_joint_angles(indices))}
@@ -96,6 +107,12 @@ class Agent:
             indices = self.all_joint_indices
         joint_infos = [p.getJointInfo(self.body, i, physicsClientId=self.id) for i in indices]
         return [j[10] for j in joint_infos]
+
+    def get_joint_stiffness(self, indices=None):
+        if indices is None:
+            indices = self.all_joint_indices
+        joint_infos = [p.getJointInfo(self.body, i, physicsClientId=self.id) for i in indices]
+        return [j[6] for j in joint_infos]
 
     def get_contact_points(self, agentB=None, linkA=None, linkB=None):
         args = dict(bodyA=self.body, physicsClientId=self.id)

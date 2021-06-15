@@ -35,7 +35,7 @@ class Sawyer(Robot):
         toc_base_pos_offset = {'scratch_itch': [-0.1, 0, 0.975], # Robot base offset before TOC base pose optimization
                                'feeding': [-0.1, 0.2, 0.975],
                                'drinking': [-0.1, 0.2, 0.975],
-                               'bed_bathing': [-0.2, 0, 0.975],
+                               'bed_bathing': [-0.2, -0.3, 0.975],
                                'dressing': [1.8, 0.7, 0.975],
                                'arm_manipulation': [-0.3, 0.6, 0.975]}
         toc_ee_orient_rpy = {'scratch_itch': [0, np.pi/2.0, 0], # Initial end effector orientation

@@ -37,7 +37,7 @@ class Stretch(Robot):
         toc_base_pos_offset = {'scratch_itch': [-1.0, -0.1, 0.09], # Robot base offset before TOC base pose optimization
                                'feeding': [-0.9, -0.3, 0.09],
                                'drinking': [-0.9, -0.3, 0.09],
-                               'bed_bathing': [-1.1, -0.1, 0.09],
+                               'bed_bathing': [-1.1, -0.4, 0.09],
                                'dressing': [0.75, -0.4, 0.09],
                                'arm_manipulation': [-1.3, 0.1, 0.09]}
         toc_ee_orient_rpy = {'scratch_itch': [0, 0, np.pi/2.0], # Initial end effector orientation

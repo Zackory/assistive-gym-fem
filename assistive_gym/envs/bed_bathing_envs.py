@@ -11,7 +11,7 @@ from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from ray.tune.registry import register_env
 
 robot_arm = 'left'
-human_controllable_joint_indices = human.right_arm_joints
+human_controllable_joint_indices = human.body_joints + human.right_arm_joints
 class BedBathingPR2Env(BedBathingEnv):
     def __init__(self):
         super(BedBathingPR2Env, self).__init__(robot=PR2(robot_arm), human=Human(human_controllable_joint_indices, controllable=False))
