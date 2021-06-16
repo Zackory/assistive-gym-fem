@@ -64,12 +64,6 @@ class HumanCreation:
         self.forearm_length = 0.0
 
         #! ADDED FOR BEDDING MANIPULATION TASK
-        self.shin_length = 0.0
-        self.thigh_radius = 0.0
-        self.thigh_length = 0.0
-
-        self.human_lengths = {}
-        self.human_radii = {}
         self.body_info = {}
         
 
@@ -292,41 +286,13 @@ class HumanCreation:
 
         self.upperarm_radius, self.upperarm_length, self.forearm_radius, self.forearm_length = upperarm_radius, upperarm_length, forearm_radius, forearm_length
         #! ADDED FOR BEDDING MANIPULATION TASK
-        self.thigh_radius, self.thigh_length = thigh_radius, thigh_length
-
-        self.human_lengths = {'head':head_length, 
-                              'pecs':pecs_length,
-                              'neck':neck_length,
-                              'upperchest':upperchest_length,
-                              'chest':chest_length,
-                              'waist':waist_length,
-                              'hips':hips_length,
-                              'upperarm':upperarm_length,
-                              'forearm':forearm_length,
-                              'thigh':thigh_length,
-                              'shin':shin_length,
-                              'foot':foot_length}
-
-        self.human_radii = {'hand':hand_radius, 
-                            'neck':neck_radius,
-                            'pecs':pecs_radius,
-                            'upperchest':upperchest_radius,
-                            'chest':chest_radius,
-                            'waist':waist_radius,
-                            'hips':hips_radius,
-                            'upperarm':upperarm_radius,
-                            'forearm':forearm_radius,
-                            'thigh':thigh_radius,
-                            'shin':shin_radius,
-                            'foot':foot_radius}
-
         self.body_info = {'head': (head_length, 0),
                           'hand': (0, hand_radius),
                           'pecs': (pecs_length, pecs_radius),
                           'neck': (neck_length, neck_radius),
                           'upperchest': (upperchest_length, upperchest_radius),
                           'chest': (chest_length, chest_radius),
-                          'waist': (waist_length, waist_radius),
+                          'waist': (waist_length, waist_radius/2.0),
                           'hips': (hips_length, hips_radius),
                           'upperarm': (upperarm_length, upperarm_radius),
                           'forearm': (forearm_length, forearm_radius),
