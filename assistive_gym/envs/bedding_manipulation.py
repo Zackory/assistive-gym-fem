@@ -22,22 +22,25 @@ class BeddingManipulationEnv(AssistiveEnv):
     def step(self, action):
         obs = self._get_obs()
 
-        grasp_loc = action[0:2]
-        release_loc = action[2:]
+        # scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
+        scale = [0.44, 1.05]
+        grasp_loc = action[0:2]*scale
+        release_loc = action[2:]*scale
         # print(grasp_loc, release_loc)
+
 
         # move sphere to 2D grasp location, some arbitrary distance z = 1 in the air
         #! don't technically need to do this, remove later
         # self.sphere_ee.set_base_pos_orient(np.append(grasp_loc, 1), np.array([0,0,0]))
-
 
         # get points on the blanket, initial state of the cloth
         data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
         # print("got blanket data")
 
         # reward_uncover_target = self.uncover_target_reward(data)
-        # print("reward: ", reward_uncover_target)
+        # print("target reward: ", reward_uncover_target)
         # reward_uncover_nontarget = self.uncover_nontarget_reward(data)
+        # print("non target reward: ", reward_uncover_nontarget)
 
         # calculate distance between the 2D grasp location and every point on the blanket, anchor points are the 4 points on the blanket closest to the 2D grasp location
         dist = []
@@ -112,8 +115,13 @@ class BeddingManipulationEnv(AssistiveEnv):
 
 
         reward_uncover_target = self.uncover_target_reward(data)
-        reward = self.config('uncover_target_weight')*reward_uncover_target
-        # reward_uncover_nontarget = self.uncover_nontarget_reward(data)
+        reward_uncover_nontarget = self.uncover_nontarget_reward(data)
+        reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
+
+
+        # print(reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release)
+        reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release
+        
         # print("reward: ", reward)
 
 
@@ -126,8 +134,8 @@ class BeddingManipulationEnv(AssistiveEnv):
         # return 0, 0, 1, {}
         return obs, reward, done, info
 
-    def change_point_color(self, limb, ind, rgb = [0, 1, 0.5, 1]):
-        p.changeVisualShape(self.points_target_limb[limb][ind].body, -1, rgbaColor=rgb, flags=0, physicsClientId=self.id)
+    def change_point_color(self, points_target_limb, limb, ind, rgb = [0, 1, 0.5, 1]):
+        p.changeVisualShape(points_target_limb[limb][ind].body, -1, rgbaColor=rgb, flags=0, physicsClientId=self.id)
 
 
     def uncover_target_reward(self, blanket_state):
@@ -148,51 +156,44 @@ class BeddingManipulationEnv(AssistiveEnv):
                         covered = True
                         points_covered += 1
                         break
-                rgb = covered_rgb if covered else uncovered_rgb
-                self.change_point_color(limb, point, rgb = rgb)
+                # rgb = covered_rgb if covered else uncovered_rgb
+                # self.change_point_color(self.points_target_limb, limb, point, rgb = rgb)
 
         points_uncovered = total_points - points_covered
 
-        print("total_targets:", self.total_target_point_count)
-        print("uncovered", points_uncovered)
+        # print("total_targets:", total_points)
+        # print("uncovered", points_uncovered)
 
-        return points_uncovered/total_points
+        return (points_uncovered/total_points)*100
 
-
-    #! NEED REDO!!!
     def uncover_nontarget_reward(self, blanket_state):
-        counts = [0, 0, 0]
-        threshold = 0.05
+        points_covered = 0
+        uncovered_rgb = [1, 0, 0, 1]
+        covered_rgb = [0, 0, 1, 1]
+        threshold = 0.028
+        total_points = self.total_nontarget_point_count
 
-        # count number of nontarget points covered by the blanket
-        for target_upperarm in self.targets_pos_upperarm_world:
-            for i, v in enumerate(blanket_state[1]):
-                if abs(np.linalg.norm(v[0:2]-target_upperarm[0:2])) < threshold:
-                    counts[0] += 1
-                    break
+        # count number of target points covered by the blanket
+        for limb, points_pos_nontarget_limb_world in self.points_pos_nontarget_limb_world.items():
+            for point in range(len(points_pos_nontarget_limb_world)):
+                covered = False
+                for i, v in enumerate(blanket_state[1]):
+                    # target_foot = np.array(target_foot)
+                    # v = np.array(v)
+                    if abs(np.linalg.norm(v[0:2]-points_pos_nontarget_limb_world[point][0:2])) < threshold:
+                        covered = True
+                        points_covered += 1
+                        break
+                # rgb = covered_rgb if covered else uncovered_rgb
+                # self.change_point_color(self.points_nontarget_limb, limb, point, rgb = rgb)
+        points_uncovered = total_points - points_covered
 
-        for target_forearm in self.targets_pos_forearm_world:
-            for i, v in enumerate(blanket_state[1]):
-                if abs(np.linalg.norm(v[0:2]-target_forearm[0:2])) < threshold:
-                    counts[1] += 1
-                    break
+        # print("total_targets:", total_points)
+        # print("uncovered", points_uncovered)
 
-
-        for target_thigh in self.targets_pos_thigh_world:
-            for i, v in enumerate(blanket_state[1]):
-                if abs(np.linalg.norm(v[0:2]-target_thigh[0:2])) < threshold:
-                    counts[2] += 1
-                    break
-
-        print("total_targets, upperarm", len(self.targets_pos_on_upperarm))
-        print("uncovered", len(self.targets_pos_on_upperarm) - counts[0])
-        print("total_targets, forearm", len(self.targets_pos_on_forearm))
-        print("uncovered", len(self.targets_pos_on_forearm) - counts[1])
-        print("total_targets, thigh", len(self.targets_pos_on_thigh))
-        print("uncovered", len(self.targets_pos_on_thigh) - counts[2])
+        # 100 when all points uncovered, 0 when all still covered
+        return (points_uncovered/total_points)*-100
         
-
-        return 0
 
     def _get_obs(self, agent=None):
         return np.zeros(1)
@@ -206,9 +207,9 @@ class BeddingManipulationEnv(AssistiveEnv):
         # Setup human in the air and let them settle into a resting pose on the bed
         joints_positions = []
         self.human.setup_joints(joints_positions, use_static_joints=False, reactive_force=None)
-        self.human.set_base_pos_orient([0, -0.4, 0.8], [-np.pi/2.0, 0, np.pi])
+        self.human.set_base_pos_orient([0, -0.2, 0.8], [-np.pi/2.0, 0, np.pi])
 
-
+        # time.sleep(10)
         # Seperate the human's legs so that it's easier to uncover a single shin
         current_l = self.human.get_joint_angles(self.human.left_leg_joints)
         current_l[1] = -0.2
@@ -217,9 +218,18 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.human.set_joint_angles(self.human.left_leg_joints, current_l, use_limits=True, velocities=0)
         self.human.set_joint_angles(self.human.right_leg_joints, current_r, use_limits=True, velocities=0)
 
+        # set shoulder angle so that person's pose is the same for each rollout
+        current_l = self.human.get_joint_angles(self.human.left_arm_joints)
+        current_l[3] = -0.2
+        current_r = self.human.get_joint_angles(self.human.right_arm_joints)
+        current_r[3] = 0.2
+        self.human.set_joint_angles(self.human.left_arm_joints, current_l, use_limits=True, velocities=0)
+        self.human.set_joint_angles(self.human.right_arm_joints, current_r, use_limits=True, velocities=0)
+        
 
+        time.sleep(2)
         # Let the person settle on the bed
-        p.setGravity(0, 0, -1, physicsClientId=self.id)
+        p.setGravity(0, 0.2, -2, physicsClientId=self.id)
         for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
 
@@ -229,6 +239,8 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.human.set_mass(self.human.base, mass=0)
         self.human.set_base_velocity(linear_velocity=[0, 0, 0], angular_velocity=[0, 0, 0])
         
+
+        # time.sleep(600)
 
         if self.use_mesh:
             # Replace the capsulized human with a human mesh
@@ -246,10 +258,11 @@ class BeddingManipulationEnv(AssistiveEnv):
         elbow_pos = self.human.get_pos_orient(self.human.right_forearm)[0]
         wrist_pos = self.human.get_pos_orient(self.human.right_hand)[0]
 
-        self.generate_points_along_body()
-        # self.generate_targets()
-        # self.generate_nontargets()
+        
+        # can index possible targets differently to uncover different target limbs, current set to shin and foot
+        self.target_limbs = self.human.all_possible_target_limbs[4]
 
+        self.generate_points_along_body()
         # time.sleep(600)
 
 
@@ -263,8 +276,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         p.changeVisualShape(self.blanket, -1, rgbaColor=[0, 0, 1, 0.75], flags=0, physicsClientId=self.id)
         p.changeVisualShape(self.blanket, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
         p.setPhysicsEngineParameter(numSubSteps=4, numSolverIterations = 4, physicsClientId=self.id)
-        p.resetBasePositionAndOrientation(self.blanket, [0, 0, 1.5], self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)
-
+        p.resetBasePositionAndOrientation(self.blanket, [0, 0.2, 1.5], self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)
 
 
         # Drop the blanket on the person, allow to settle
@@ -314,8 +326,6 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.observation_space_robot = spaces.Box(low=np.array([-1000000000.0]*self.obs_robot_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_robot_len, dtype=np.float32), dtype=np.float32)
             self.observation_space_human = spaces.Box(low=np.array([-1000000000.0]*self.obs_human_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_human_len, dtype=np.float32), dtype=np.float32)
 
-            # may be doubling action, 25*2 = 50?
-
         else:
             self.init_env_variables()
 
@@ -325,139 +335,62 @@ class BeddingManipulationEnv(AssistiveEnv):
 
 
     def generate_points_along_body(self):
-        self.point_indices_to_ignore = []
 
-        self.target_limbs = [self.human.right_shin, self.human.right_foot]
+        self.point_indices_to_ignore = []
 
         self.points_pos_on_target_limb = {}
         self.points_target_limb = {}
         self.total_target_point_count = 0
-        for limb in self.target_limbs:
+
+        self.points_pos_on_nontarget_limb = {}
+        self.points_nontarget_limb = {}
+        self.total_nontarget_point_count = 0
+
+        #TODO: NEED TO DEAL WITH THE HANDS (sphere)
+        for limb in self.human.all_body_parts:
             length, radius = self.human.body_info[limb] if limb not in self.human.limbs_need_corrections else self.human.body_info[limb][0]
-            self.points_pos_on_target_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-            self.points_target_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_target_limb[limb]), visual=True, collision=False, rgba=[1, 1, 1, 1])
-            self.total_target_point_count += len(self.points_pos_on_target_limb[limb])
+            if limb in [18, 28]:
+                pass
+            #! COULD JUST REMOVE HANDS?? LOOK INTO WHEN WORKING ON TORSO
+            elif limb in self.target_limbs:
+                self.points_pos_on_target_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
+                self.points_target_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_target_limb[limb]), visual=True, collision=False, rgba=[1, 1, 1, 1])
+                self.total_target_point_count += len(self.points_pos_on_target_limb[limb])
+            else:
+                # print("nontarget limb")
+                self.points_pos_on_nontarget_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
+                self.points_nontarget_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_nontarget_limb[limb]), visual=True, collision=False, rgba=[0, 0, 1, 1])
+                self.total_nontarget_point_count += len(self.points_pos_on_nontarget_limb[limb])
 
         self.update_points_along_body()
     
     def update_points_along_body(self):
 
         self.points_pos_target_limb_world = {}
-        for limb in self.target_limbs:
+        self.points_pos_nontarget_limb_world = {}
+        for limb in self.human.all_body_parts:
+            # get current position and orientation of the limbs, apply a correction to the pos, orient if necessary
             limb_pos, limb_orient = self.human.get_pos_orient(limb)
             if limb in self.human.limbs_need_corrections:
                 limb_pos = limb_pos + self.human.body_info[limb][1]
                 limb_orient = self.get_quaternion(self.get_euler(limb_orient) + self.human.body_info[limb][2])
             points_pos_limb_world = []
-            for points_pos_on_target_limb, point in zip(self.points_pos_on_target_limb[limb], self.points_target_limb[limb]):
-                point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, points_pos_on_target_limb, [0, 0, 0, 1], physicsClientId=self.id)[0])
-                points_pos_limb_world.append(point_pos)
-                point.set_base_pos_orient(point_pos, [0, 0, 0, 1])
-            self.points_pos_target_limb_world[limb] = points_pos_limb_world
 
-
-    #!! ONCE EVERYTHING WORKS, GET RID OF THIS    
-    """
-
-    def generate_targets(self):
-
-        self.targets_pos_on_foot = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -self.human.human_lengths['foot']]), radius=self.human.human_radii['foot'], distance_between_points=0.03)
-        self.targets_pos_on_shin = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -self.human.human_lengths['shin']]), radius=self.human.human_radii['shin'], distance_between_points=0.03)
-
-        self.targets_foot = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.targets_pos_on_foot), visual=True, collision=False, rgba=[0, 1, 0, 1])
-        self.targets_shin = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.targets_pos_on_shin), visual=True, collision=False, rgba=[0, 1, 1, 1])
-        self.total_target_count = len(self.targets_pos_on_foot) + len(self.targets_pos_on_shin)
-
-        self.update_targets()
-
-    # self.get_quaternion([np.pi/2.0, 0, 0])
-    
-    def update_targets(self):
-
-        foot_pos, foot_orient = self.human.get_pos_orient(self.human.right_foot)
-        foot_pos = foot_pos + [self.human.human_radii['foot']/4, self.human.human_radii['foot']/4, 0]
-        print("foot: ", foot_pos, foot_orient)
-        foot_orient = self.get_quaternion(self.get_euler(foot_orient) + [-np.pi/2.0, 0, 0])
-
-
-        # self.create_capsule(radius=self.human.human_radii['foot'], length=0.3, position=foot_pos, orientation=foot_orient)
-        print("foot: ", foot_pos, foot_orient)
-        self.targets_pos_foot_world = []
-        for target_pos_on_foot, target in zip(self.targets_pos_on_foot, self.targets_foot):
-            # target_pos = np.array(p.multiplyTransforms(foot_pos, foot_orient, target_pos_on_foot, self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)[0])
-            target_pos = np.array(p.multiplyTransforms(foot_pos, foot_orient, target_pos_on_foot, [0, 0, 0, 1], physicsClientId=self.id)[0])
-            self.targets_pos_foot_world.append(target_pos)
-            target.set_base_pos_orient(target_pos, [0, 0, 0, 1])
-
-        shin_pos, shin_orient = self.human.get_pos_orient(self.human.right_shin)
-        shin_orient = self.get_quaternion(self.get_euler(shin_orient) + [np.pi/30.0, 0, 0])
-        # self.create_capsule(radius=self.human.human_radii['shin'], length=0.6, position=shin_pos, orientation=shin_orient)
-        print("shin: ", shin_pos, shin_orient)
-        self.targets_pos_shin_world = []
-        for target_pos_on_shin, target in zip(self.targets_pos_on_shin, self.targets_shin):
-            target_pos = np.array(p.multiplyTransforms(shin_pos, shin_orient, target_pos_on_shin, [0, 0, 0, 1], physicsClientId=self.id)[0])
-            self.targets_pos_shin_world.append(target_pos)
-            target.set_base_pos_orient(target_pos, [0, 0, 0, 1])
-
-    
-    # ############! NEED TO EDIT FOR CLARITY/TO ADD ALL LIMBS
-    def generate_nontargets(self):
-        self.target_indices_to_ignore = []
-        rgba = [1, 0, 0, 1]
-        spacing = 0.03
-
-    
-        self.targets_pos_on_forearm = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -self.human.forearm_length]), radius=self.human.forearm_radius, distance_between_points=spacing)
-        self.targets_pos_on_upperarm = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -self.human.upperarm_length]), radius=self.human.upperarm_radius, distance_between_points=spacing)
-        # print(self.targets_pos_on_foot, self.targets_pos_on_shin)
-
-        self.targets_forearm = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.targets_pos_on_forearm), visual=True, collision=False, rgba=rgba)
-        self.targets_upperarm = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.targets_pos_on_upperarm), visual=True, collision=False, rgba=rgba)
-        # self.total_target_count = len(self.targets_pos_on_foot) + len(self.targets_pos_on_shin)
-
-        
-        self.targets_pos_on_thigh = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -self.human.thigh_length]), radius=self.human.thigh_radius, distance_between_points=spacing)
-        self.targets_thigh = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.targets_pos_on_thigh), visual=True, collision=False, rgba=rgba)
-
-
-
-        self.total_target_count = len(self.targets_pos_on_foot) + len(self.targets_pos_on_shin) + len(self.targets_pos_on_thigh)
-
-
-        self.update_nontargets()
-
-    
-    def update_nontargets(self):
-        forearm_pos, forearm_orient = self.human.get_pos_orient(self.human.right_forearm)
-        print("forearm: ", forearm_pos, forearm_orient)
-        self.targets_pos_forearm_world = []
-        for target_pos_on_forearm, target in zip(self.targets_pos_on_forearm, self.targets_forearm):
-            target_pos = np.array(p.multiplyTransforms(forearm_pos, forearm_orient, target_pos_on_forearm, [0, 0, 0, 1], physicsClientId=self.id)[0])
-            self.targets_pos_forearm_world.append(target_pos)
-            target.set_base_pos_orient(target_pos, [0, 0, 0, 1])
-
-        upperarm_pos, upperarm_orient = self.human.get_pos_orient(self.human.right_upperarm)
-        print("upperarm: ", upperarm_pos, upperarm_orient)
-        # print(self.human.get_pos_orient(self.human.right_upperarm))
-        self.targets_pos_upperarm_world = []
-        for target_pos_on_upperarm, target in zip(self.targets_pos_on_upperarm, self.targets_upperarm):
-            target_pos = np.array(p.multiplyTransforms(upperarm_pos, upperarm_orient, target_pos_on_upperarm, [0, 0, 0, 1], physicsClientId=self.id)[0])
-            self.targets_pos_upperarm_world.append(target_pos)
-            target.set_base_pos_orient(target_pos, [0, 0, 0, 1])
-
-
-        thigh_pos, thigh_orient = self.human.get_pos_orient(self.human.right_thigh)
-        print("thigh: ", thigh_pos, thigh_orient)
-        thigh_pos = thigh_pos + [self.human.thigh_radius/4, 0, 0]
-        thigh_orient = self.get_quaternion(self.get_euler(thigh_orient) + [np.pi/60.0, 0, 0])
-        # print(self.human.get_pos_orient(self.human.right_thigh))
-        self.targets_pos_thigh_world = []
-        for target_pos_on_thigh, target in zip(self.targets_pos_on_thigh, self.targets_thigh):
-            target_pos = np.array(p.multiplyTransforms(thigh_pos, thigh_orient, target_pos_on_thigh, [0, 0, 0, 1], physicsClientId=self.id)[0])
-            self.targets_pos_thigh_world.append(target_pos)
-            target.set_base_pos_orient(target_pos, [0, 0, 0, 1])
-
-    """
+            if limb in [18, 28]:
+                pass
+            elif limb in self.target_limbs:
+                for points_pos_on_target_limb, point in zip(self.points_pos_on_target_limb[limb], self.points_target_limb[limb]):
+                    point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, points_pos_on_target_limb, [0, 0, 0, 1], physicsClientId=self.id)[0])
+                    points_pos_limb_world.append(point_pos)
+                    point.set_base_pos_orient(point_pos, [0, 0, 0, 1])
+                self.points_pos_target_limb_world[limb] = points_pos_limb_world
+            else:
+                # print("nontarget limb")
+                for points_pos_on_nontarget_limb, point in zip(self.points_pos_on_nontarget_limb[limb], self.points_nontarget_limb[limb]):
+                    point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, points_pos_on_nontarget_limb, [0, 0, 0, 1], physicsClientId=self.id)[0])
+                    points_pos_limb_world.append(point_pos)
+                    point.set_base_pos_orient(point_pos, [0, 0, 0, 1])
+                self.points_pos_nontarget_limb_world[limb] = points_pos_limb_world
 
 
     
