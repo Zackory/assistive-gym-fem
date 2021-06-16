@@ -12,7 +12,7 @@ head_joints = [29, 30, 31, 32]
 test_joints = [46, 39]
 
 #! added for bedding manipulaiton
-limbs = [14, 16, 24, 26, 35, 36, 39, 42, 43, 46]
+limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42]
 
 class Human(Agent):
     def __init__(self, controllable_joint_indices, controllable=False):
@@ -84,11 +84,18 @@ class Human(Agent):
         self.pecs_offset = 0.0
 
         # #! ADDED FOR BEDDING MANIPULATION TASK
-        self.thigh_radius = 0.0
-        self.thigh_length = 0.0
-        self.human_lengths = {}
-        self.human_radii = {}
-        self.limbs = limbs
+        #! modify to include head, chest, etc.
+        self.all_body_parts = limbs
+
+        # index to select target limb
+        # 0: right hand, 1: right forearm, 2: right upperarm
+        # 3: right foot, 4: right shin, 5: right thigh
+        # 6: left hand, 7: left forearm, 8: left upperarm
+        # 9: left foot, 10: left shin, 11: left thigh
+        self.all_possible_target_limbs = [[limbs[0]], limbs[0:2], limbs[0:3], 
+                                          [limbs[3]], limbs[3:5], limbs[3:6],
+                                          [limbs[6]], limbs[6:8], limbs[6:9],
+                                          [limbs[9]], limbs[9:11], limbs[9:]]
 
 
         self.body_info = {}
@@ -136,13 +143,6 @@ class Human(Agent):
         self.pecs_offset = human_creation.pecs_offset
 
         #! ADDED FOR BEDDING MANIPULATION TASK
-        #TODO clean up old code
-        self.thigh_radius = human_creation.thigh_radius
-        self.thigh_length = human_creation.thigh_length
-
-        self.human_lengths = human_creation.human_lengths
-        self.human_radii = human_creation.human_radii
-
         self.limbs_need_corrections = [self.right_thigh, self.right_shin, self.right_foot, self.left_thigh, self.left_shin, self.left_foot]
         self.body_info = {self.waist: human_creation.body_info['waist'],
                           self.chest: human_creation.body_info['chest'],
@@ -157,13 +157,12 @@ class Human(Agent):
                           self.left_hand: human_creation.body_info['hand'],
                           self.neck: human_creation.body_info['neck'],
                           self.head: human_creation.body_info['head'],
-                          self.right_thigh: (human_creation.body_info['thigh'], 0, [np.pi/60.0, 0, 0]),
+                          self.right_thigh: (human_creation.body_info['thigh'], [human_creation.body_info['thigh'][1]/4, 0, 0], [np.pi/60.0, 0, 0]),
                           self.right_shin: (human_creation.body_info['shin'], 0, [np.pi/30.0, 0, 0]),
-                          self.right_foot: (human_creation.body_info['foot'], [human_creation.body_info['foot'][1]/2, human_creation.body_info['foot'][1]/2, 0], [-np.pi/2.0, 0, 0]),
-                          self.left_thigh: (human_creation.body_info['thigh'], 0, [np.pi/60.0, 0, 0]),
+                          self.right_foot: (human_creation.body_info['foot'], [human_creation.body_info['foot'][1]/3, human_creation.body_info['foot'][1]/3, 0], [-np.pi/2.0, 0, 0]),
+                          self.left_thigh: (human_creation.body_info['thigh'], [-human_creation.body_info['thigh'][1]/4, 0, 0], [np.pi/60.0, 0, 0]),
                           self.left_shin: (human_creation.body_info['shin'], 0,[np.pi/30.0, np.pi/60.0, 0]),
-                          self.left_foot: (human_creation.body_info['foot'], [-human_creation.body_info['foot'][1]/2, human_creation.body_info['foot'][1]/2, 0], [-np.pi/2.0, 0, 0])}
-
+                          self.left_foot: (human_creation.body_info['foot'], [-human_creation.body_info['foot'][1]/3, human_creation.body_info['foot'][1]/3, 0], [-np.pi/2.0, 0, 0])}
 
         super(Human, self).init(self.body, id, np_random, self.controllable_joint_indices)
 
