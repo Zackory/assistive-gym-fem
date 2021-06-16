@@ -9,12 +9,14 @@ import cv2
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
 
-# python3 -m assistive_gym.learn --env "BeddingManipulationSphere-v1" --algo ppo --train --train-timesteps 500 --save-dir ./trained_models/
+# python3 -m assistive_gym.learn --env "BeddingManipulationSphere-v1" --algo ppo --train --train-timesteps 1000 --save-dir ./trained_models/
+# python3 -m assistive_gym.learn --env "BeddingManipulationSphere-v1" --algo ppo --render --seed 0 --load-policy-path ./trained_models/ --render-episodes 1
+
 
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
         if robot is None:
-            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=1, obs_human_len=1, frame_skip=1, time_step=0.01, deformable=True)
+            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=1, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
 
     def step(self, action):
@@ -119,9 +121,9 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.iteration += 1
         done = self.iteration >= 1
 
-        # time.sleep(600)
+        # time.sleep(1)
 
-
+        # return 0, 0, 1, {}
         return obs, reward, done, info
 
     def change_point_color(self, limb, ind, rgb = [0, 1, 0.5, 1]):
@@ -130,29 +132,29 @@ class BeddingManipulationEnv(AssistiveEnv):
 
     def uncover_target_reward(self, blanket_state):
         points_covered = 0
-        # uncovered_rgb = [0, 1, 0.5, 1]
-        # covered_rgb = [1, 1, 1, 1]
+        uncovered_rgb = [0, 1, 0.5, 1]
+        covered_rgb = [1, 1, 1, 1]
         threshold = 0.028
         total_points = self.total_target_point_count
 
         # count number of target points covered by the blanket
         for limb, points_pos_target_limb_world in self.points_pos_target_limb_world.items():
             for point in range(len(points_pos_target_limb_world)):
-                # covered = False
+                covered = False
                 for i, v in enumerate(blanket_state[1]):
                     # target_foot = np.array(target_foot)
                     # v = np.array(v)
                     if abs(np.linalg.norm(v[0:2]-points_pos_target_limb_world[point][0:2])) < threshold:
-                        # covered = True
+                        covered = True
                         points_covered += 1
                         break
-                # rgb = covered_rgb if covered else uncovered_rgb
-                # self.change_point_color(limb, point, rgb = rgb)
+                rgb = covered_rgb if covered else uncovered_rgb
+                self.change_point_color(limb, point, rgb = rgb)
 
         points_uncovered = total_points - points_covered
 
-        # print("total_targets:", self.total_target_point_count)
-        # print("uncovered", points_uncovered)
+        print("total_targets:", self.total_target_point_count)
+        print("uncovered", points_uncovered)
 
         return points_uncovered/total_points
 
@@ -197,7 +199,7 @@ class BeddingManipulationEnv(AssistiveEnv):
 
     def reset(self):
         super(BeddingManipulationEnv, self).reset()
-        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed')
+        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
 
         
@@ -266,12 +268,13 @@ class BeddingManipulationEnv(AssistiveEnv):
 
 
         # Drop the blanket on the person, allow to settle
-        for _ in range(10):
+        for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
     
         if self.robot is None:
             position = np.array([-0.3, -0.86, 0.8])
             self.sphere_ee = self.create_sphere(radius=0.01, mass=0.0, pos = position, visual=True, collision=True, rgba=[0, 0, 0, 1])
+            # self.robot = self.sphere_ee
 
 
         # data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
@@ -287,28 +290,11 @@ class BeddingManipulationEnv(AssistiveEnv):
         # import time
         # time.sleep(3000)
 
-        # Setup camera for taking depth images
-        # self.setup_camera(camera_eye=[0, 0, 0.305+2.101], camera_target=[0, 0, 0.305], fov=60, camera_width=1920//4, camera_height=1080//4)
-        # self.setup_camera(camera_eye=[0, 0, 0.305+0.101], camera_target=[0, 0, 0.305], fov=60, camera_width=1920//4, camera_height=1080//4)
-        self.setup_camera_rpy(camera_target=[0, 0, 0.305+2.101], distance=0.01, rpy=[0, -90, 0], fov=60, camera_width=468//2, camera_height=398)
-        # 468 x 398
-        # self.setup_camera(camera_eye=[0.5, 0.75, 1.5], camera_target=[-0.2, 0, 0.75])
-        img, depth = self.get_camera_image_depth()
-        depth = (depth - np.amin(depth)) / (np.amax(depth) - np.amin(depth))
-        depth = (depth * 255).astype(np.uint8)
-        print(depth)
-        # cv2.imshow('image', cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        depth_colormap = cv2.applyColorMap(depth, cv2.COLORMAP_VIRIDIS)
-        cv2.imshow('image', depth_colormap)
-        # plt.imshow(img)
-        # plt.show()
-        # Image.fromarray(img[:, :, :3], 'RGB').show()
-
         # Enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
 
         # Initialize enviornment variables
-        self.time = time.time()
+        # self.time = time.time()
         if self.robot is None:      # Sphere manipulator
             from gym import spaces
             # modified version of init_env_variables
@@ -322,22 +308,13 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.action_robot_len = 4
             self.action_human_len = len(self.human.controllable_joint_indices) if self.human.controllable else 0
             self.obs_robot_len = len(self._get_obs('robot'))    # 1
-            self.obs_human_len = len(self._get_obs('human'))    # 1
+            self.obs_human_len = 0
             self.action_space_robot = spaces.Box(low=np.array([-1.0]*self.action_robot_len, dtype=np.float32), high=np.array([1.0]*self.action_robot_len, dtype=np.float32), dtype=np.float32)
             self.action_space_human = spaces.Box(low=np.array([-1.0]*self.action_human_len, dtype=np.float32), high=np.array([1.0]*self.action_human_len, dtype=np.float32), dtype=np.float32)
             self.observation_space_robot = spaces.Box(low=np.array([-1000000000.0]*self.obs_robot_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_robot_len, dtype=np.float32), dtype=np.float32)
             self.observation_space_human = spaces.Box(low=np.array([-1000000000.0]*self.obs_human_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_human_len, dtype=np.float32), dtype=np.float32)
 
-            print(self.action_robot_len)
-            print(self.action_human_len)
-            print(self.obs_robot_len)
-            print(self.obs_human_len)
-            print(self.action_space_robot)
-            # print(self.action_space_human)
-            print(self.observation_space_robot)
-            print(self.observation_space_human)
-
-            # may be doubling action, 25*2 = 5?
+            # may be doubling action, 25*2 = 50?
 
         else:
             self.init_env_variables()
