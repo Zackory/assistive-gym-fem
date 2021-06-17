@@ -1,13 +1,15 @@
 import os, sys, multiprocessing, gym, ray, shutil, argparse, importlib, glob
 import numpy as np
 # from ray.rllib.agents.ppo import PPOTrainer, DEFAULT_CONFIG
-from ray.rllib.agents import ppo, sac
+from ray.rllib.agents import ppo, sac, ddpg
+from ray.rllib.agents.ppo import appo
 from ray.tune.logger import pretty_print
 from numpngw import write_apng
 
 
+
 def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
-    num_processes = multiprocessing.cpu_count()
+    num_processes = multiprocessing.cpu_count()//2
     if algo == 'ppo':
         config = ppo.DEFAULT_CONFIG.copy()
         config['train_batch_size'] = 32
@@ -22,6 +24,22 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
         config['learning_starts'] = 1000
         config['Q_model']['fcnet_hiddens'] = [100, 100]
         config['policy_model']['fcnet_hiddens'] = [100, 100]
+    elif algo == 'ddpg':
+        config = ddpg.DEFAULT_CONFIG.copy()
+        config['timesteps_per_iteration'] = 1
+        config['learning_starts'] = 16
+        config['actor_hiddens'] = [20, 20]
+        config['critic_hiddens'] = [20, 20]
+        config['buffer_size'] = 1000
+    elif algo == 'appo':
+        config = appo.DEFAULT_CONFIG.copy()
+        config['train_batch_size'] = 16
+        config['rollout_fragment_length'] = 1
+        config['num_sgd_iter'] = 50
+        config['lambda'] = 0.95
+        config['replay_proportion'] = 0.25
+        config['replay_buffer_num_slots'] = 1000
+        config['model']['fcnet_hiddens'] = [20, 20]
     config['num_workers'] = num_processes
     config['num_cpus_per_worker'] = 0
     config['seed'] = seed
@@ -41,6 +59,10 @@ def load_policy(env, algo, env_name, policy_path=None, coop=False, seed=0, extra
         agent = ppo.PPOTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
     elif algo == 'sac':
         agent = sac.SACTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
+    elif algo == 'ddpg':
+        agent = ddpg.DDPGTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
+    elif algo == 'appo':
+        agent = appo.APPOTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
     if policy_path != '':
         if 'checkpoint' in policy_path:
             agent.restore(policy_path)
@@ -69,7 +91,7 @@ def make_env(env_name, coop=False, seed=1001):
     return env
 
 def train(env_name, algo, timesteps_total=1000000, save_dir='./trained_models/', load_policy_path='', coop=False, seed=0, extra_configs={}):
-    ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
+    ray.init(num_cpus=multiprocessing.cpu_count()//2, ignore_reinit_error=True, log_to_driver=False)
     env = make_env(env_name, coop)
     agent, checkpoint_path = load_policy(env, algo, env_name, load_policy_path, coop, seed, extra_configs)
     env.disconnect()
