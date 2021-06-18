@@ -50,7 +50,7 @@ def cost_function(x):
 
     # all_data.append([fevals, x, cost])
 
-    pickle.dump([fevals, x, cost])
+    pickle.dump([fevals, x, cost], f)
 
     return cost
 
