@@ -9,7 +9,7 @@ from numpngw import write_apng
 
 
 def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
-    num_processes = multiprocessing.cpu_count()//2
+    num_processes = multiprocessing.cpu_count()
     if algo == 'ppo':
         config = ppo.DEFAULT_CONFIG.copy()
         config['train_batch_size'] = 32
@@ -33,9 +33,10 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
         config['buffer_size'] = 1000
     elif algo == 'appo':
         config = appo.DEFAULT_CONFIG.copy()
-        config['train_batch_size'] = 16
+        config['train_batch_size'] = 32
         config['rollout_fragment_length'] = 1
         config['num_sgd_iter'] = 50
+        config['vtrace'] = False
         config['lambda'] = 0.95
         config['replay_proportion'] = 0.25
         config['replay_buffer_num_slots'] = 1000
@@ -91,7 +92,7 @@ def make_env(env_name, coop=False, seed=1001):
     return env
 
 def train(env_name, algo, timesteps_total=1000000, save_dir='./trained_models/', load_policy_path='', coop=False, seed=0, extra_configs={}):
-    ray.init(num_cpus=multiprocessing.cpu_count()//2, ignore_reinit_error=True, log_to_driver=False)
+    ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
     env = make_env(env_name, coop)
     agent, checkpoint_path = load_policy(env, algo, env_name, load_policy_path, coop, seed, extra_configs)
     env.disconnect()
