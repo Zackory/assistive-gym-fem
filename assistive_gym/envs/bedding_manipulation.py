@@ -227,7 +227,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.human.set_joint_angles(self.human.right_arm_joints, current_r, use_limits=True, velocities=0)
         
 
-        time.sleep(2)
+        # time.sleep(2)
         # Let the person settle on the bed
         p.setGravity(0, 0.2, -2, physicsClientId=self.id)
         for _ in range(100):
