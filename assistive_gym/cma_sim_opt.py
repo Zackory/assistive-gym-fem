@@ -14,7 +14,7 @@ observation = env.reset()
 best_params = []
 best_costs = []
 fevals = 0
-f = open("all_cmaes_data","wb")
+f = open("all_cmaes_data2","wb")
 
 def cost_function(x):
     global best_params, best_costs, fevals, f
@@ -64,7 +64,7 @@ opts = cma.CMAOptions({'verb_disp': 1, 'popsize': 8}) # , 'tolfun': 10, 'maxfeva
 bound = np.array([1]*4)
 opts.set('bounds', [[-1]*4, bound])
 opts.set('CMA_stds', bound)
-x0 = bound/2.0
+x0 = np.random.uniform(-1,1,4)
 # sigma0 = 0.3 # bound/4.0
 sigma0 = 0.05 # bound/4.0
 xopt, es = cma.fmin2(cost_function, x0, sigma0, opts)
