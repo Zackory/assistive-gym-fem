@@ -14,7 +14,7 @@ observation = env.reset()
 best_params = []
 best_costs = []
 fevals = 0
-f = open("all_cmaes_data2","wb")
+f = open("all_cmaes_data","wb")
 
 def cost_function(x):
     global best_params, best_costs, fevals, f
