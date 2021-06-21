@@ -1,7 +1,7 @@
 import os, sys, multiprocessing, gym, ray, shutil, argparse, importlib, glob
 import numpy as np
 # from ray.rllib.agents.ppo import PPOTrainer, DEFAULT_CONFIG
-from ray.rllib.agents import ppo, sac, ddpg
+from ray.rllib.agents import ppo, sac, ddpg, impala
 from ray.rllib.agents.ppo import appo
 from ray.tune.logger import pretty_print
 from numpngw import write_apng
@@ -41,6 +41,15 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
         config['replay_proportion'] = 0.25
         config['replay_buffer_num_slots'] = 1000
         config['model']['fcnet_hiddens'] = [20, 20]
+    elif algo == 'impala':
+        config = impala.DEFAULT_CONFIG.copy()
+        config['train_batch_size'] = 32
+        config['rollout_fragment_length'] = 1
+        config['num_sgd_iter'] = 50
+        config['replay_proportion'] = 0.25
+        config['replay_buffer_num_slots'] = 1000
+        config['model']['fcnet_hiddens'] = [20, 20]
+
     config['num_workers'] = num_processes
     config['num_cpus_per_worker'] = 0
     config['seed'] = seed
@@ -64,6 +73,8 @@ def load_policy(env, algo, env_name, policy_path=None, coop=False, seed=0, extra
         agent = ddpg.DDPGTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
     elif algo == 'appo':
         agent = appo.APPOTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
+    elif algo == 'impala':
+        agent = impala.ImpalaTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
     if policy_path != '':
         if 'checkpoint' in policy_path:
             agent.restore(policy_path)
