@@ -1,9 +1,10 @@
-import gym, sys, argparse, cma
+import gym, sys, argparse
+from scipy import optimize
 import numpy as np
 import pickle
 # import assistive_gym
 
-parser = argparse.ArgumentParser(description='CMA-ES sim optimization')
+parser = argparse.ArgumentParser(description='powell sim optimization')
 parser.add_argument('--env', default='BeddingManipulationSphere-v1', help='env', required=True)
 # parser.add_argument('--cma-dir', default='', help='CMA replay directory', required=True)
 args = parser.parse_args()
@@ -14,7 +15,7 @@ observation = env.reset()
 best_params = []
 best_costs = []
 fevals = 0
-f = open("all_cmaes_data","wb")
+f = open("all_powell_data","wb")
 
 def cost_function(x):
     global best_params, best_costs, fevals, f
@@ -54,24 +55,18 @@ def cost_function(x):
 
     return cost
 
-opts = cma.CMAOptions({'verb_disp': 1, 'popsize': 8}) # , 'tolfun': 10, 'maxfevals': 500
-# opts = cma.CMAOptions({'verb_disp': 1, 'popsize': 25}) # , 'tolfun': 10, 'maxfevals': 500
-# bound = np.array([0.3, 1.0, 5, 1, 2])
-# opts.set('bounds', [[0.0]*5, bound])
-# bound = np.array([0.3]*7 + [1.0]*7 + [5]*7 + [1]*7 + [2]*7)
-# bound = np.array([0.3]*7 + [1.0]*7 + [5]*7 + [1]*7 + [5]*7)
-# opts.set('bounds', [[0.0]*35, bound])
-bound = np.array([1]*4)
-opts.set('bounds', [[-1]*4, bound])
-opts.set('CMA_stds', bound)
+bounds = [(-1, 1)]*4
 x0 = np.random.uniform(-1,1,4)
-# sigma0 = 0.3 # bound/4.0
-sigma0 = 0.05 # bound/4.0
-xopt, es = cma.fmin2(cost_function, x0, sigma0, opts)
-es.result_pretty()
-
+options = {"disp": True, "maxiter": 1500}
+result = optimize.minimize(cost_function, x0, method = "Powell", bounds=bounds, options = options)
+print("Solution:", result.x)
 
 print('Best Costs:', best_costs)
 print('Best Params:', [[('%.5f' % xx) for xx in x] for x in best_params])
 
+f.close()
+
+
+f = open("powell_result", "wb")
+pickle.dump(result, f)
 f.close()
