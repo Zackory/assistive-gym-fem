@@ -111,6 +111,28 @@ class Util:
                 points.append(point_on_circle)
 
         return points
+    
+    def sphere_points(self, radius, samples=10):
+        '''
+        Creates a set of points around a sphere - using fibonacci sphere algorithm
+        See: https://stackoverflow.com/a/26127012
+        '''
+        points = []
+        # golden angle in radians
+        phi = np.pi * (3.0 - 5.0**0.5)
+
+        for i in range(samples):
+            y = 1 - (i / float(samples - 1)) * 2  # y goes from 1 to -1
+            r = (1 - y * y)**0.5  # radius at y
+
+            theta = phi * i  # golden angle increment
+
+            x = np.cos(theta) * r
+            z = np.sin(theta) * r
+
+            points.append(np.array([x, y, z])*radius)
+        
+        return points
 
     def orthogonal_vector(self, v):
         '''
