@@ -12,7 +12,8 @@ head_joints = [29, 30, 31, 32]
 test_joints = [46, 39]
 
 #! added for bedding manipulaiton
-limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42]
+# limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42]
+limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42, 2, 5, 8, 32]
 
 class Human(Agent):
     def __init__(self, controllable_joint_indices, controllable=False):
@@ -95,7 +96,7 @@ class Human(Agent):
         self.all_possible_target_limbs = [[limbs[0]], limbs[0:2], limbs[0:3], 
                                           [limbs[3]], limbs[3:5], limbs[3:6],
                                           [limbs[6]], limbs[6:8], limbs[6:9],
-                                          [limbs[9]], limbs[9:11], limbs[9:]]
+                                          [limbs[9]], limbs[9:11], limbs[9:12]]
 
 
         self.body_info = {}
@@ -143,18 +144,18 @@ class Human(Agent):
         self.pecs_offset = human_creation.pecs_offset
 
         #! ADDED FOR BEDDING MANIPULATION TASK
-        self.limbs_need_corrections = [self.right_thigh, self.right_shin, self.right_foot, self.left_thigh, self.left_shin, self.left_foot]
-        self.body_info = {self.waist: human_creation.body_info['waist'],
-                          self.chest: human_creation.body_info['chest'],
-                          self.upper_chest: human_creation.body_info['upperchest'],
+        self.limbs_need_corrections = [self.right_thigh, self.right_shin, self.right_foot, self.right_hand, self.left_thigh, self.left_shin, self.left_hand, self.left_foot, self.waist, self.chest, self.upper_chest]
+        self.body_info = {self.waist: (human_creation.body_info['waist'], [-0.18,-0.03,0], [0, -np.pi/2.0, -np.pi/2.5]),
+                          self.chest: (human_creation.body_info['chest'], [-0.15,-0.05,0.025], [0,-np.pi/2.0,-np.pi/2.0]),
+                          self.upper_chest: (human_creation.body_info['upperchest'], [-0.15,-0.06,0.025], [0,0,-np.pi/2.0]),
                           self.right_pecs: human_creation.body_info['pecs'],
                           self.right_upperarm: human_creation.body_info['upperarm'],
                           self.right_forearm: human_creation.body_info['forearm'],
-                          self.right_hand: human_creation.body_info['hand'],
+                          self.right_hand: (human_creation.body_info['hand'], [0,human_creation.body_info['hand'][1]/4, 0.05], 0),
                           self.left_pecs: human_creation.body_info['pecs'],
                           self.left_upperarm: human_creation.body_info['upperarm'],
                           self.left_forearm: human_creation.body_info['forearm'],
-                          self.left_hand: human_creation.body_info['hand'],
+                          self.left_hand: (human_creation.body_info['hand'], [0,human_creation.body_info['hand'][1]/4, 0.05], 0),
                           self.neck: human_creation.body_info['neck'],
                           self.head: human_creation.body_info['head'],
                           self.right_thigh: (human_creation.body_info['thigh'], [human_creation.body_info['thigh'][1]/4, 0, 0], [np.pi/60.0, 0, 0]),
@@ -195,7 +196,7 @@ class Human(Agent):
             forces = [reactive_force] * len(self.target_joint_angles)
             self.control(self.controllable_joint_indices, self.target_joint_angles, reactive_gain, forces)
 
-    def get_body_params():
+    def get_body_params(self):
         # body_shape = np.zeros(10)
         joint_ranges = np.zeros(21, 2).flatten()
         return np.concatenate([self.body_shape, joint_ranges])
