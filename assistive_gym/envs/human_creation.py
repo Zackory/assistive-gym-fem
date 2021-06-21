@@ -128,6 +128,7 @@ class HumanCreation:
 
         joint_c, joint_v = -1, -1
         if gender == 'male':
+
             m = self.np_random.uniform(50, 110) # 78.4
             chest_c, chest_v = create_body(shape=p.GEOM_CAPSULE, radius=chest_radius/2.0, length=chest_length-chest_radius if chest_length-chest_radius > 0 else 0, position_offset=[0, -joints[3][1]/0.8, -joints[3][2]*0.35], orientation=p.getQuaternionFromEuler([0, np.pi/2.0, 0], physicsClientId=self.id))
             upper_chest_c, upper_chest_v = create_body(shape=p.GEOM_CAPSULE, radius=upperchest_radius/2.0, length=upperchest_length-upperchest_radius if upperchest_length-upperchest_radius > 0 else 0, position_offset=[-joints[6][0], 0, -joints[6][2]/1.5], orientation=p.getQuaternionFromEuler([0, np.pi/2.0, 0], physicsClientId=self.id))
@@ -206,6 +207,7 @@ class HumanCreation:
             left_foot_p = joints[7] - joints[4]
 
             self.pecs_offset = 0.031+pecs_radius/2
+
         else:
             m = self.np_random.uniform(50, 110) # 62.5
             chest_c, chest_v = create_body(shape=p.GEOM_CAPSULE, radius=chest_radius/2.0, length=chest_length-chest_radius if chest_length-chest_radius > 0 else 0, position_offset=[0, -0.03, -joints[3][2]/6], orientation=p.getQuaternionFromEuler([0, np.pi/2.0, 0], physicsClientId=self.id)) #
@@ -285,14 +287,22 @@ class HumanCreation:
 
 
         self.upperarm_radius, self.upperarm_length, self.forearm_radius, self.forearm_length = upperarm_radius, upperarm_length, forearm_radius, forearm_length
+        
+        
+        
         #! ADDED FOR BEDDING MANIPULATION TASK
-        self.body_info = {'head': (head_length, 0),
+        # adjusted values based on what was used to create capsules
+        waist_radius=waist_radius/2.0
+        chest_radius=chest_radius/2.0
+        upperchest_radius=upperchest_radius/2.0
+
+        self.body_info = {'head': (-head_length, head_length/1.8),
                           'hand': (0, hand_radius),
                           'pecs': (pecs_length, pecs_radius),
                           'neck': (neck_length, neck_radius),
                           'upperchest': (upperchest_length, upperchest_radius),
                           'chest': (chest_length, chest_radius),
-                          'waist': (waist_length, waist_radius/2.0),
+                          'waist': (waist_length, waist_radius),
                           'hips': (hips_length, hips_radius),
                           'upperarm': (upperarm_length, upperarm_radius),
                           'forearm': (forearm_length, forearm_radius),
