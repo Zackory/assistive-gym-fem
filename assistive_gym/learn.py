@@ -16,7 +16,7 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
         config['num_sgd_iter'] = 50
         config['sgd_minibatch_size'] = 2
         config['lambda'] = 0.95
-        config['model']['fcnet_hiddens'] = [20, 20]
+        config['model']['fcnet_hiddens'] = [50, 50]
     elif algo == 'sac':
         # NOTE: pip3 install tensorflow_probability
         config = sac.DEFAULT_CONFIG.copy()
@@ -176,8 +176,9 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
         obs = env.reset()
         done = False
         reward_total = 0.0
-        force_list = []
-        task_success = 0.0
+        if env !=  'BeddingManipulationSphere-v1':
+            force_list = []
+            task_success = 0.0
         while not done:
             if coop:
                 # Compute the next action for the robot/human using the trained policies
@@ -192,14 +193,19 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
                 action = test_agent.compute_action(obs)
                 obs, reward, done, info = env.step(action)
             reward_total += reward
-            force_list.append(info['total_force_on_human'])
-            task_success = info['task_success']
+            if env !=  'BeddingManipulationSphere-v1':
+                force_list.append(info['total_force_on_human'])
+                task_success = info['task_success']
 
         rewards.append(reward_total)
-        forces.append(np.mean(force_list))
-        task_successes.append(task_success)
+        if env !=  'BeddingManipulationSphere-v1':
+            forces.append(np.mean(force_list))
+            task_successes.append(task_success)
         if verbose:
-            print('Reward total: %.2f, mean force: %.2f, task success: %r' % (reward_total, np.mean(force_list), task_success))
+            if env == 'BeddingManipulationSphere-v1':
+                print('Reward total: %.2f' % (reward_total))
+            else:
+                print('Reward total: %.2f, mean force: %.2f, task success: %r' % (reward_total, np.mean(force_list), task_success))
         sys.stdout.flush()
     env.disconnect()
 
@@ -208,13 +214,14 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
     print('Reward Mean:', np.mean(rewards))
     print('Reward Std:', np.std(rewards))
 
-    # print('Forces:', forces)
-    print('Force Mean:', np.mean(forces))
-    print('Force Std:', np.std(forces))
+    if env !=  'BeddingManipulationSphere-v1':
+        # print('Forces:', forces)
+        print('Force Mean:', np.mean(forces))
+        print('Force Std:', np.std(forces))
 
-    # print('Task Successes:', task_successes)
-    print('Task Success Mean:', np.mean(task_successes))
-    print('Task Success Std:', np.std(task_successes))
+        # print('Task Successes:', task_successes)
+        print('Task Success Mean:', np.mean(task_successes))
+        print('Task Success Std:', np.std(task_successes))
     sys.stdout.flush()
 
 
