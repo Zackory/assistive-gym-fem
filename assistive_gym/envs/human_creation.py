@@ -295,14 +295,15 @@ class HumanCreation:
         waist_radius=waist_radius/2.0
         chest_radius=chest_radius/2.0
         upperchest_radius=upperchest_radius/2.0
+        reduce_length = 0.8
 
         self.body_info = {'head': (-head_length, head_length/1.8),
                           'hand': (0, hand_radius),
                           'pecs': (pecs_length, pecs_radius),
                           'neck': (neck_length, neck_radius),
-                          'upperchest': (upperchest_length, upperchest_radius),
-                          'chest': (chest_length, chest_radius),
-                          'waist': (waist_length, waist_radius),
+                          'upperchest': (upperchest_length*reduce_length, upperchest_radius),
+                          'chest': (chest_length*reduce_length, chest_radius),
+                          'waist': (waist_length*reduce_length, waist_radius),
                           'hips': (hips_length, hips_radius),
                           'upperarm': (upperarm_length, upperarm_radius),
                           'forearm': (forearm_length, forearm_radius),
