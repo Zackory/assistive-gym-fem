@@ -16,11 +16,12 @@ from .agents.human_mesh import HumanMesh
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
         if robot is None:
-            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=1, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=12, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
 
     def step(self, action):
         obs = self._get_obs()
+        # print(obs)
 
         # scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
         scale = [0.44, 1.05]
@@ -220,7 +221,9 @@ class BeddingManipulationEnv(AssistiveEnv):
 
 
     def _get_obs(self, agent=None):
-        return np.array([self.target_limb_code])
+        selected_target_limb = np.zeros(12)
+        selected_target_limb[self.target_limb_code] = 1
+        return selected_target_limb
 
     def reset(self):
         super(BeddingManipulationEnv, self).reset()
@@ -281,7 +284,7 @@ class BeddingManipulationEnv(AssistiveEnv):
 
 
         # randomly select a target limb to uncover
-        self.target_limb_code = np.random.randint(0,12)
+        self.target_limb_code = self.np_random.random_integers(0,11)
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
         # self.target_limb = self.human.all_possible_target_limbs[4]
         self.generate_points_along_body()
