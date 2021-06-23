@@ -26,7 +26,6 @@ def cost_function(x):
         # env.render()
         observation, reward, done, info = env.step(x)
         cost = -reward
-    sys.stdout.flush()
 
     # Keep track of the best 5 param sets
     if len(best_costs) < 5 or cost < best_costs[-1]:
