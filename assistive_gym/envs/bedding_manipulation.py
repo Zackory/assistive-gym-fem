@@ -307,7 +307,7 @@ class BeddingManipulationEnv(AssistiveEnv):
                     break
             if numsteps > 400:
                 break
-        print("steps to rest:", numsteps)
+        # print("steps to rest:", numsteps)
 
         # * Lock the person in place
         self.human.control(self.human.all_joint_indices, self.human.get_joint_angles(), 0.05, 100)
@@ -328,8 +328,6 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * select a target limb to uncover (may be fixed or random)
         self.target_limb_code = self.np_random.random_integers(0,11) if not self.fixed_target else self.target_limb_code
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
-        # time.sleep(2)
-        # return self._get_obs
         self.generate_points_along_body()
        
         # * spawn blanket
