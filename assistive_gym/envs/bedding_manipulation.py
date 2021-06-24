@@ -20,6 +20,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.rendering = False
         self.fixed_target = True
         self.target_limb_code = 4
+        self.fixed_pose = False
 
     def step(self, action):
         obs = self._get_obs()
@@ -266,7 +267,8 @@ class BeddingManipulationEnv(AssistiveEnv):
 
     def reset(self):
         super(BeddingManipulationEnv, self).reset()
-        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed')
+        body_shape = body_shape=np.zeros((1, 10)) if self.fixed_pose else None
+        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=body_shape)
 
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
@@ -276,14 +278,15 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.human.setup_joints(joints_positions, use_static_joints=False, reactive_force=None)
         self.human.set_base_pos_orient([0, -0.2, 1.1], [-np.pi/2.0, 0, np.pi])
 
-        # * Add small variation to the body pose
-        motor_indices, motor_positions, motor_velocities, motor_torques = self.human.get_motor_joint_states()
-        # print(motor_positions)
-        self.human.set_joint_angles(motor_indices, motor_positions+self.np_random.uniform(-0.2, 0.2, size=len(motor_indices)))
-        # self.increase_pose_variation()
-        # * Increase friction of joints so human doesn't fail around exessively as they settle
-        # print([p.getDynamicsInfo(self.human.body, joint)[1] for joint in self.human.all_joint_indices])
-        self.human.set_whole_body_frictions(spinning_friction=2)
+        if not self.fixed_pose:
+            # * Add small variation to the body pose
+            motor_indices, motor_positions, motor_velocities, motor_torques = self.human.get_motor_joint_states()
+            # print(motor_positions)
+            self.human.set_joint_angles(motor_indices, motor_positions+self.np_random.uniform(-0.2, 0.2, size=len(motor_indices)))
+            # self.increase_pose_variation()
+            # * Increase friction of joints so human doesn't fail around exessively as they settle
+            # print([p.getDynamicsInfo(self.human.body, joint)[1] for joint in self.human.all_joint_indices])
+            self.human.set_whole_body_frictions(spinning_friction=2)
 
         # * Let the person settle on the bed
         p.setGravity(0, 0, -1, physicsClientId=self.id)
@@ -311,7 +314,6 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.human.set_mass(self.human.base, mass=0)
         self.human.set_base_velocity(linear_velocity=[0, 0, 0], angular_velocity=[0, 0, 0])
         
-
         if self.use_mesh:
             # Replace the capsulized human with a human mesh
             self.human = HumanMesh()
