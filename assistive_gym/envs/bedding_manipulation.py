@@ -283,7 +283,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         # self.increase_pose_variation()
         # * Increase friction of joints so human doesn't fail around exessively as they settle
         # print([p.getDynamicsInfo(self.human.body, joint)[1] for joint in self.human.all_joint_indices])
-        self.human.set_whole_body_frictions(spinning_friction=2, rolling_friction=0.2)
+        self.human.set_whole_body_frictions(spinning_friction=2)
 
         # * Let the person settle on the bed
         p.setGravity(0, 0, -1, physicsClientId=self.id)
@@ -291,15 +291,20 @@ class BeddingManipulationEnv(AssistiveEnv):
         for _ in range(5):
             p.stepSimulation(physicsClientId=self.id)
         # * continue stepping the simulation until the human joint velocities are under the threshold
-        threshold = 1e-3
+        threshold = 1e-2
         settling = True
+        numsteps = 0
         while settling:
             settling = False
             for i in self.human.all_joint_indices:
                 if np.any(np.abs(self.human.get_velocity(i)) >= threshold):
                     p.stepSimulation(physicsClientId=self.id)
+                    numsteps += 1
                     settling = True
                     break
+            if numsteps > 400:
+                break
+        print("steps to rest:", numsteps)
 
         # * Lock the person in place
         self.human.control(self.human.all_joint_indices, self.human.get_joint_angles(), 0.05, 100)
@@ -321,6 +326,8 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * select a target limb to uncover (may be fixed or random)
         self.target_limb_code = self.np_random.random_integers(0,11) if not self.fixed_target else self.target_limb_code
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
+        # time.sleep(2)
+        # return self._get_obs
         self.generate_points_along_body()
        
         # * spawn blanket
@@ -410,7 +417,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             # *     generates list of point positions around the body part capsule (sphere if the hands)
             # *     creates all the spheres necessary to uniformly cover the body part (spheres created at some arbitrary position (transformed to correct location in update_points_along_body())
             # *     add to running total of target/nontarget points
-            # *     only generate sphere bodies if self.rendering = True
+            # *     only generate sphere bodies if self.rendering == True
             if limb in self.target_limb:
                 if limb in [self.human.left_hand, self.human.right_hand]:
                     self.points_pos_on_target_limb[limb] = self.util.sphere_points(radius=radius, samples = 20)
