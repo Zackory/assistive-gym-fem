@@ -11,7 +11,8 @@ left_leg_joints = [40, 41, 42, 43, 44, 45, 46]
 head_joints = [29, 30, 31, 32]
 test_joints = [46, 39]
 
-#! added for bedding manipulaiton
+#! added for bedding manipulation
+#? can the chest be removed? alignment is less reliable with large pose variation and there is a lot of overlap with points on upperchest and waist anyway
 # limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42]
 limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42, 2, 5, 8, 32]
 
@@ -145,17 +146,17 @@ class Human(Agent):
 
         #! ADDED FOR BEDDING MANIPULATION TASK
         self.limbs_need_corrections = [self.right_thigh, self.right_shin, self.right_foot, self.right_hand, self.left_thigh, self.left_shin, self.left_hand, self.left_foot, self.waist, self.chest, self.upper_chest]
-        self.body_info = {self.waist: (human_creation.body_info['waist'], [-0.18,-0.03,0], [0, -np.pi/2.0, -np.pi/2.5]),
-                          self.chest: (human_creation.body_info['chest'], [-0.15,-0.05,0.025], [0,-np.pi/2.0,-np.pi/2.0]),
+        self.body_info = {self.waist: (human_creation.body_info['waist'], [-0.15,-0.03,0], [0, -np.pi/2.0, -np.pi/2.0]),
+                          self.chest: (human_creation.body_info['chest'], [-0.15,-0.05,0.025], [0,-np.pi/2.0,-np.pi/1.6]),
                           self.upper_chest: (human_creation.body_info['upperchest'], [-0.15,-0.06,0.025], [0,0,-np.pi/2.0]),
                           self.right_pecs: human_creation.body_info['pecs'],
                           self.right_upperarm: human_creation.body_info['upperarm'],
                           self.right_forearm: human_creation.body_info['forearm'],
-                          self.right_hand: (human_creation.body_info['hand'], [0,human_creation.body_info['hand'][1]/4, 0.05], 0),
+                          self.right_hand: (human_creation.body_info['hand'], [0,human_creation.body_info['hand'][1], 0], 0),
                           self.left_pecs: human_creation.body_info['pecs'],
                           self.left_upperarm: human_creation.body_info['upperarm'],
                           self.left_forearm: human_creation.body_info['forearm'],
-                          self.left_hand: (human_creation.body_info['hand'], [0,human_creation.body_info['hand'][1]/4, 0.05], 0),
+                          self.left_hand: (human_creation.body_info['hand'], [0,human_creation.body_info['hand'][1], 0], 0),
                           self.neck: human_creation.body_info['neck'],
                           self.head: human_creation.body_info['head'],
                           self.right_thigh: (human_creation.body_info['thigh'], [human_creation.body_info['thigh'][1]/4, 0, 0], [np.pi/60.0, 0, 0]),
