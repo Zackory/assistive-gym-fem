@@ -38,6 +38,17 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # * get rid of any nontarget points that are not covered by the initial state of the blanket (will not be considered in reward calculation at the end of the step)
         self.non_target_initially_uncovered(data)
+        # * compute rewards
+        reward_uncover_target = self.uncover_target_reward(data)
+        reward_uncover_nontarget = self.uncover_nontarget_reward(data)
+        reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
+        reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
+        # * sum and weight rewards from individual functions to get overall reward
+        reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
+        
+        if self.rendering:
+            print("rewards for each measure:", reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered)
+            print("overall reward: ", reward)
 
         # initial_uncovered_target = self.uncover_target_reward(data)
         # initial_uncovered_nontarget = self.uncover_nontarget_reward(data)
@@ -159,7 +170,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         uncovered_rgb = [1, 0, 0, 1]
         covered_rgb = [0, 0, 1, 1]
         threshold = 0.028
-        total_points = self.total_nontarget_point_count
+        total_points = self.total_nontarget_point_count - len(self.points_pos_nontarget_limb_world[self.human.head])
 
         # account for case where all nontarget points were initially uncovered
         if total_points == 0:
@@ -167,16 +178,19 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # count number of target points covered by the blanket
         for limb, points_pos_nontarget_limb_world in self.points_pos_nontarget_limb_world.items():
-            for point in range(len(points_pos_nontarget_limb_world)):
-                covered = False
-                for i, v in enumerate(blanket_state[1]):
-                    if abs(np.linalg.norm(v[0:2]-points_pos_nontarget_limb_world[point][0:2])) < threshold:
-                        covered = True
-                        points_covered += 1
-                        break
-                if self.rendering:
-                    rgb = covered_rgb if covered else uncovered_rgb
-                    self.change_point_color(self.points_nontarget_limb, limb, point, rgb = rgb)
+            if limb != self.human.head:
+                # print(limb)
+                for point in range(len(points_pos_nontarget_limb_world)):
+                    covered = False
+                    for i, v in enumerate(blanket_state[1]):
+                        if abs(np.linalg.norm(v[0:2]-points_pos_nontarget_limb_world[point][0:2])) < threshold:
+                            covered = True
+                            points_covered += 1
+                            break
+                    # print("limb", limb, "covered", covered)
+                    if self.rendering:
+                        rgb = covered_rgb if covered else uncovered_rgb
+                        self.change_point_color(self.points_nontarget_limb, limb, point, rgb = rgb)
         points_uncovered = total_points - points_covered
         
         if self.rendering:
