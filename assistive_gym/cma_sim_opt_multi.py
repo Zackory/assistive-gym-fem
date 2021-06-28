@@ -55,7 +55,7 @@ if __name__ == "__main__":
     opts.set('CMA_stds', bounds)
 
     x0 = np.random.uniform(-1,1,4)
-    sigma0 = 0.05
+    sigma0 = 0.1
     reward_threshold = 95
     t0 = time.time()
 
