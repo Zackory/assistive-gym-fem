@@ -13,7 +13,7 @@ from .agents.human_mesh import HumanMesh
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
         if robot is None:
-            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=14, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=2, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
         
         self.take_pictures = False
@@ -21,10 +21,13 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.fixed_target = True
         self.target_limb_code = 4
         self.fixed_pose = False
+        self.seed_val = 1001
+        self.save_pstate = False
+        self.pstate_file = None
 
     def step(self, action):
         obs = self._get_obs()
-        # return 0, 0, 1, {}
+        # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
         if self.rendering:
             print(obs)
 
@@ -271,7 +274,11 @@ class BeddingManipulationEnv(AssistiveEnv):
 
     def _get_obs(self, agent=None):
         if self.fixed_target:
-            return np.concatenate([np.concatenate(self.human.get_pos_orient(limb)) for limb in self.target_limb], axis = None)
+            # return np.concatenate([np.concatenate(self.human.get_pos_orient(limb)) for limb in self.target_limb], axis = None)
+            all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
+            all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
+            return (all_joint_angles, all_pos_orient)
+            
         else:
             #! REVISIT THIS
             selected_target_limb = np.zeros(12)
@@ -279,10 +286,26 @@ class BeddingManipulationEnv(AssistiveEnv):
             human_limb_pos = np.concatenate([self.human.get_pos_orient(joint) for joint in self.human.all_joint_indices]).ravel()
             return selected_target_limb + human_limb_pos
 
+    def set_seed_val(self, seed = 1001):
+        if seed != self.seed_val:
+            self.seed_val = seed
+    
+    def set_target_limb_code(self, target_limb_code=None):
+        if target_limb_code == None:
+            self.target_limb_code = self.np_random.random_integers(0,11)
+        else:
+            self.target_limb_code = target_limb_code
+
+    def set_pstate_file(self, filename):
+        if self.pstate_file != filename:
+            self.pstate_file = filename
+            self.save_pstate = True
+
     def reset(self):
+
         super(BeddingManipulationEnv, self).reset()
-        body_shape = body_shape=np.zeros((1, 10)) if self.fixed_pose else None
-        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=body_shape)
+        self.seed(self.seed_val)
+        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
 
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
@@ -339,9 +362,20 @@ class BeddingManipulationEnv(AssistiveEnv):
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])
  
-        # * select a target limb to uncover (may be fixed or random)
-        self.target_limb_code = self.np_random.random_integers(0,11) if not self.fixed_target else self.target_limb_code
+        # * select a target limb to uncover (may be fixed or random) 
+        if not self.fixed_target:
+            self.set_target_limb_code()
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
+
+        # #! NEED TO MOVE THIS
+        # if self.save_pstate:
+        #     p.saveBullet(self.pstate_file)
+        #     self.save_pstate = False
+
+        # # print(self.human.get_joint_angles(self.human.all_joint_indices))
+        # # time.sleep(2)
+        # return 0
+
         self.generate_points_along_body()
        
         # * spawn blanket
@@ -390,6 +424,10 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.observation_space_human = spaces.Box(low=np.array([-1000000000.0]*self.obs_human_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_human_len, dtype=np.float32), dtype=np.float32)
         else:
             self.init_env_variables()
+        
+        if self.save_pstate:
+            p.saveBullet(self.pstate_file)
+            self.save_pstate = False
         
         
         # * Setup camera for taking images
