@@ -75,7 +75,7 @@ if __name__ == "__main__":
     pose_count = 1
 
     # * repeat optimization for x number of human poses
-    for _ in range(2):
+    for _ in range(200):
         # * open the pickle file to send optimization data to
         filename = f"targ{env.target_limb_code}_p{pose_count}_{env.seed_val}_{args.run_id}"
         f = open(os.path.join(pkl_loc, filename +".pkl"),"wb")
@@ -126,7 +126,7 @@ if __name__ == "__main__":
                     "total_elapsed_time":total_elapsed_time, 
                     "actions": actions,
                     "rewards": rewards, 
-                    "observations":observations[0], # save only the first observation (they are all the same since pose is the same)
+                    "observations":observations, #? save only the first observation (they are all the same since pose is the same)
                     "elapsed_time": elapsed_time}, f)
 
                 # * if any of the processes reached the reward_threshold, stop optimizing
