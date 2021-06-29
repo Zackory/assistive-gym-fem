@@ -28,7 +28,9 @@ class AssistiveEnv(gym.Env):
         self.gpu = False
         self.view_matrix = None
         self.deformable = deformable
-        self.seed(seed)
+        #!! CHANGED FOR BEDDING MANIPULATION TASK (CMAES!)!! GO BACK AND CHANGE LATER
+        self.seed(seeding.create_seed())
+        # self.seed(seed)
         if render:
             self.render()
         else:
