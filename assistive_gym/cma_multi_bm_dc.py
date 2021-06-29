@@ -133,8 +133,8 @@ if __name__ == "__main__":
                 if np.any(np.array(costs) <= -reward_threshold):
                     print("Reward threshold reached")
                     break
-                if iterations >= 300:
-                    print("No solution found after 300 iterations")
+                if fevals >= 300:
+                    print("No solution found after 300 fevals")
                     break
 
             es.result_pretty()
