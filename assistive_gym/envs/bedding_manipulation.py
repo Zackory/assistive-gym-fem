@@ -292,7 +292,7 @@ class BeddingManipulationEnv(AssistiveEnv):
     
     def set_target_limb_code(self, target_limb_code=None):
         if target_limb_code == None:
-            self.target_limb_code = self.np_random.random_integers(0,11)
+            self.target_limb_code = self.np_random.randint(0,12)
         else:
             self.target_limb_code = target_limb_code
 
