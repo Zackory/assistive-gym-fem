@@ -41,18 +41,7 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # * get rid of any nontarget points that are not covered by the initial state of the blanket (will not be considered in reward calculation at the end of the step)
         self.non_target_initially_uncovered(data)
-        # * compute rewards
-        reward_uncover_target = self.uncover_target_reward(data)
-        reward_uncover_nontarget = self.uncover_nontarget_reward(data)
-        reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
-        reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
-        # * sum and weight rewards from individual functions to get overall reward
-        reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
         
-        if self.rendering:
-            print("rewards for each measure:", reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered)
-            print("overall reward: ", reward)
-
         # initial_uncovered_target = self.uncover_target_reward(data)
         # initial_uncovered_nontarget = self.uncover_nontarget_reward(data)
         # reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
