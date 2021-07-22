@@ -9,6 +9,7 @@ from torch import set_default_tensor_type
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
+from gym.utils import seeding
 
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
@@ -17,7 +18,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.use_mesh = use_mesh
         
         self.take_pictures = False
-        self.rendering = False
+        self.rendering = True
         self.fixed_target = True
         self.target_limb_code = 4
         self.fixed_pose = False
@@ -69,8 +70,9 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # * move sphere up by some delta z
         current_pos = self.sphere_ee.get_base_pos_orient()[0]
-        delta_z = 0.5                           # distance to move up
-        final_z = delta_z + current_pos[2]      # global z position after moving up delta z
+        delta_z = 0.4                           # distance to move up (with respect to the top of the bed)
+        bed_height = 0.58                       # height of the bed
+        final_z = delta_z + bed_height          # global goal z position
         while current_pos[2] <= final_z:
             self.sphere_ee.set_base_pos_orient(current_pos + np.array([0, 0, 0.005]), np.array([0,0,0]))
             p.stepSimulation(physicsClientId=self.id)
@@ -163,6 +165,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         covered_rgb = [0, 0, 1, 1]
         threshold = 0.028
         total_points = self.total_nontarget_point_count - len(self.points_pos_nontarget_limb_world[self.human.head])
+        total_target_points = self.total_target_point_count
 
         # account for case where all nontarget points were initially uncovered
         if total_points == 0:
@@ -189,8 +192,8 @@ class BeddingManipulationEnv(AssistiveEnv):
             print("total nontarget points:", total_points)
             print("nontarget uncovered:", points_uncovered)
 
-        # 100 when all points uncovered, 0 when all still covered
-        return (points_uncovered/total_points)*-100
+        # if the same number of target and nontarget points are uncovered, total reward is 0
+        return -(points_uncovered/total_target_points)*100
         
     def keep_head_uncovered_reward(self, blanket_state):
         '''
@@ -218,9 +221,9 @@ class BeddingManipulationEnv(AssistiveEnv):
         if self.rendering:
             print("total points on head:", total_points)
             print("points on head covered", points_covered)
-
-        # 100 when all points uncovered, 0 when all still covered
-        return (points_covered/total_points)*-100
+        
+        # penalize on double the percentage of head points covered (doubled to increase weight of covering the head)
+        return -(points_covered/total_points)*200
 
     def non_target_initially_uncovered(self, blanket_state):
         '''
@@ -293,7 +296,10 @@ class BeddingManipulationEnv(AssistiveEnv):
     def reset(self):
 
         super(BeddingManipulationEnv, self).reset()
+        if not self.fixed_pose:
+            self.set_seed_val(seeding.create_seed())
         self.seed(self.seed_val)
+
         self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
 
         # * enable rendering
@@ -362,7 +368,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         #     self.save_pstate = False
 
         # # print(self.human.get_joint_angles(self.human.all_joint_indices))
-        # # time.sleep(2)
+        # time.sleep(2)
         # return 0
 
         self.generate_points_along_body()
