@@ -122,7 +122,6 @@ class BeddingManipulationEnv(AssistiveEnv):
         info = {'split_reward':split_reward, 'point_counts':point_counts}
         self.iteration += 1
         done = self.iteration >= 1
-        print(info)
 
         # return 0, 0, 1, {}
         return obs, reward, done, info
