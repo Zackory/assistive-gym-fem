@@ -116,9 +116,13 @@ class BeddingManipulationEnv(AssistiveEnv):
             print("rewards for each measure:", reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered)
             print("overall reward: ", reward)
 
-        info = {}
+        split_reward = [reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered]
+        point_counts = [self.total_target_point_count, self.total_nontarget_point_count, len(self.points_pos_nontarget_limb_world[self.human.head])]
+
+        info = {'split_reward':split_reward, 'point_counts':point_counts}
         self.iteration += 1
         done = self.iteration >= 1
+        print(info)
 
         # return 0, 0, 1, {}
         return obs, reward, done, info
