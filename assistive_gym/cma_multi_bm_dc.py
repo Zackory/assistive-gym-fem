@@ -21,7 +21,7 @@ def cost_function(action):
         cost = -reward
         elapsed_time = t1 - t0
 
-    return [cost, observation, elapsed_time, pid]
+    return [cost, observation, elapsed_time, pid, info]
 
 
 # # # TEST COST FUNCTION
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # * make the enviornment, set the specified target limb code and an initial seed value
     env = gym.make(args.env)
     env.set_seed_val(seeding.create_seed())
-    env.set_target_limb_code()
+    env.set_target_limb_code(4)
 
     # * set the number of processes to 1/4 of the total number of cpus
     # *     collect data for 4 different target limbs simultaneously by running this script in 4 terminals
@@ -105,6 +105,7 @@ if __name__ == "__main__":
                 observations = output[1]
                 elapsed_time = output[2]
                 pids = output[3]
+                info = output[4]
                 es.tell(actions, costs)
                 
                 rewards = [-c for c in costs]
@@ -127,7 +128,8 @@ if __name__ == "__main__":
                     "actions": actions,
                     "rewards": rewards, 
                     "observations":observations, #? save only the first observation (they are all the same since pose is the same)
-                    "elapsed_time": elapsed_time}, f)
+                    "elapsed_time": elapsed_time,
+                    "info":info}, f)
 
                 # * if any of the processes reached the reward_threshold, stop optimizing
                 if np.any(np.array(costs) <= -reward_threshold):
