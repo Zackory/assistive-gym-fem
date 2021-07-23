@@ -145,6 +145,6 @@ if __name__ == "__main__":
             print()
 
             env.set_seed_val(seeding.create_seed())
-            env.set_target_limb_code()
+            env.set_target_limb_code(4)
             pose_count += 1
 
