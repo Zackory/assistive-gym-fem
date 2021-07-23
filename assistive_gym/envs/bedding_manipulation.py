@@ -14,7 +14,7 @@ from gym.utils import seeding
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
         if robot is None:
-            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=2, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=12, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
         
         self.take_pictures = False
@@ -25,11 +25,13 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.seed_val = 1001
         self.save_pstate = False
         self.pstate_file = None
+        self.cmaes_dc = False
 
     def step(self, action):
-        obs = self._get_obs()
+
         # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
         if self.rendering:
+            obs = self._get_obs()
             print(obs)
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
@@ -268,11 +270,23 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.total_nontarget_point_count -= points_to_remove_count
 
     def _get_obs(self, agent=None):
+
         if self.fixed_target:
-            # return np.concatenate([np.concatenate(self.human.get_pos_orient(limb)) for limb in self.target_limb], axis = None)
-            all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
-            all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
-            return (all_joint_angles, all_pos_orient)
+            if self.cmaes_dc:
+                all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
+                all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
+                return (all_joint_angles, all_pos_orient)
+            else:
+                pose = []
+                for limb in self.human.obs_limbs:
+                    pos, orient = self.human.get_pos_orient(limb)
+                    # print("pose", limb, pos, orient)
+                    pos2D = pos[0:2]
+                    yaw = p.getEulerFromQuaternion(orient)[-1]
+                    pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
+                pose = np.reshape(pose, (1, 12))
+                return pose
+
             
         else:
             #! REVISIT THIS
@@ -299,7 +313,7 @@ class BeddingManipulationEnv(AssistiveEnv):
     def reset(self):
 
         super(BeddingManipulationEnv, self).reset()
-        if not self.fixed_pose:
+        if not self.fixed_pose and not self.cmaes_dc:
             self.set_seed_val(seeding.create_seed())
         self.seed(self.seed_val)
 
