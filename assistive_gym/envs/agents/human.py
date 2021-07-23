@@ -10,6 +10,7 @@ right_leg_joints = [33, 34, 35, 36, 37, 38, 39]
 left_leg_joints = [40, 41, 42, 43, 44, 45, 46]
 head_joints = [29, 30, 31, 32]
 test_joints = [46, 39]
+obs_limbs = [36, 43, 16, 26]
 
 #! added for bedding manipulation
 #? can the chest be removed? alignment is less reliable with large pose variation and there is a lot of overlap with points on upperchest and waist anyway
@@ -88,6 +89,7 @@ class Human(Agent):
         # #! ADDED FOR BEDDING MANIPULATION TASK
         #! modify to include head, chest, etc.
         self.all_body_parts = limbs
+        self.obs_limbs = obs_limbs
 
         # index to select target limb
         # 0: right hand, 1: right forearm, 2: right upperarm
