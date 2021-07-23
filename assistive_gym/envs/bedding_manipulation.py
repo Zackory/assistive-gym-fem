@@ -299,8 +299,8 @@ class BeddingManipulationEnv(AssistiveEnv):
     def reset(self):
 
         super(BeddingManipulationEnv, self).reset()
-        if not self.fixed_pose:
-            self.set_seed_val(seeding.create_seed())
+        # if not self.fixed_pose:
+        #     self.set_seed_val(seeding.create_seed())
         self.seed(self.seed_val)
 
         self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
