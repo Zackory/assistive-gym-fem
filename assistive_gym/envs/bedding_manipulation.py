@@ -28,10 +28,10 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.cmaes_dc = False
 
     def step(self, action):
+        obs = self._get_obs()
 
         # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
         if self.rendering:
-            obs = self._get_obs()
             print(obs)
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
@@ -284,7 +284,7 @@ class BeddingManipulationEnv(AssistiveEnv):
                     pos2D = pos[0:2]
                     yaw = p.getEulerFromQuaternion(orient)[-1]
                     pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
-                pose = np.reshape(pose, (1, 12))
+                pose = np.concatenate(pose, axis=0)
                 return pose
 
             
@@ -378,6 +378,9 @@ class BeddingManipulationEnv(AssistiveEnv):
         if not self.fixed_target:
             self.set_target_limb_code()
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
+
+        print(self._get_obs())
+        return 0
 
         # #! NEED TO MOVE THIS
         # if self.save_pstate:
