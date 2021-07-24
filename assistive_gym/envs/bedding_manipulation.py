@@ -18,9 +18,9 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.use_mesh = use_mesh
         
         self.take_pictures = False
-        self.rendering = False
+        self.rendering = True
         self.fixed_target = True
-        self.target_limb_code = 4
+        self.target_limb_code = 7
         self.fixed_pose = False
         self.seed_val = 1001
         self.save_pstate = False
@@ -379,8 +379,8 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.set_target_limb_code()
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
 
-        print(self._get_obs())
-        return 0
+        # print(self._get_obs())
+        # return 0
 
         # #! NEED TO MOVE THIS
         # if self.save_pstate:
