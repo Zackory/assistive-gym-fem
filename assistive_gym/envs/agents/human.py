@@ -102,7 +102,8 @@ class Human(Agent):
             [limbs[3]], limbs[3:5], limbs[3:6],
             [limbs[6]], limbs[6:8], limbs[6:9],
             [limbs[9]], limbs[9:11], limbs[9:12],
-            [ 39, 36, 46, 43]]
+            [ 39, 36, 46, 43], [18, 16, 14, 28, 26, 24, 2, 5, 8]]
+
 
         self.body_info = {}
         self.limbs_need_corrections = []
