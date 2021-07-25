@@ -18,9 +18,9 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.use_mesh = use_mesh
         
         self.take_pictures = False
-        self.rendering = True
+        self.rendering = False
         self.fixed_target = True
-        self.target_limb_code = 7
+        self.target_limb_code = 12
         self.fixed_pose = False
         self.seed_val = 1001
         self.save_pstate = False
