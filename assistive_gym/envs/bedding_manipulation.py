@@ -18,9 +18,9 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.use_mesh = use_mesh
         
         self.take_pictures = False
-        self.rendering = True
+        self.rendering = False
         self.fixed_target = True
-        self.target_limb_code = 13
+        self.target_limb_code = 12
         self.fixed_pose = False
         self.seed_val = 1001
         self.save_pstate = False
@@ -497,7 +497,7 @@ class BeddingManipulationEnv(AssistiveEnv):
                 if limb in [self.human.left_hand, self.human.right_hand]:
                     self.points_pos_on_nontarget_limb[limb] = self.util.sphere_points(radius=radius, samples = 20)
                 else:
-                    self.points_pos_on_nontarget_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.04)
+                    self.points_pos_on_nontarget_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
                 if self.rendering:
                     self.points_nontarget_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_nontarget_limb[limb]), visual=True, collision=False, rgba=[0, 0, 1, 1])
                 self.total_nontarget_point_count += len(self.points_pos_on_nontarget_limb[limb])
