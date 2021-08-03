@@ -55,6 +55,10 @@ class BeddingManipulationEnv(AssistiveEnv):
             v = np.array(v)
             d = np.linalg.norm(v[0:2] - grasp_loc)
             dist.append(d)
+        # * if no points on the blanket are within 2.8 cm of the grasp location, immediately exit with huge penalty
+        if not np.any(np.array(dist) < 0.028):
+            return obs, -5000, 1, {'reward':'grasp not over blanket'}
+
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
         # for a in anchor_idx:
             # print("anchor loc: ", data[1][a])
@@ -68,7 +72,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         constraint_ids.append(p.createSoftBodyAnchor(self.blanket, anchor_idx[0], self.sphere_ee.body, -1, [0, 0, 0]))
         for i in anchor_idx[1:]:
             pos_diff = np.array(data[1][i]) - np.array(data[1][anchor_idx[0]])
-            constraint_ids.append(p.createSoftBodyAnchor(self.blanket, i, self.sphere_ee.body, -1, [0, 0, 0]))
+            constraint_ids.append(p.createSoftBodyAnchor(self.blanket, i, self.sphere_ee.body, -1, pos_diff))
 
         # * move sphere up by some delta z
         current_pos = self.sphere_ee.get_base_pos_orient()[0]
@@ -109,7 +113,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * compute rewards
         reward_uncover_target = self.uncover_target_reward(data)
         reward_uncover_nontarget = self.uncover_nontarget_reward(data)
-        reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
+        reward_distance_btw_grasp_release = -1500 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
         reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
         # * sum and weight rewards from individual functions to get overall reward
         reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
