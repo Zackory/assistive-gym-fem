@@ -20,7 +20,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.take_pictures = False
         self.rendering = False
         self.fixed_target = True
-        self.target_limb_code = 12
+        self.target_limb_code = 13
         self.fixed_pose = False
         self.seed_val = 1001
         self.save_pstate = False
@@ -33,6 +33,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
         if self.rendering:
             print(obs)
+            print(action)
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
         scale = [0.44, 1.05]
@@ -55,9 +56,9 @@ class BeddingManipulationEnv(AssistiveEnv):
             v = np.array(v)
             d = np.linalg.norm(v[0:2] - grasp_loc)
             dist.append(d)
-        # * if no points on the blanket are within 2.8 cm of the grasp location, immediately exit with huge penalty
+        # * if no points on the blanket are within 2.8 cm of the grasp location, immediately exit with reward = 0
         if not np.any(np.array(dist) < 0.028):
-            return obs, -5000, 1, {'reward':'grasp not over blanket'}
+            return obs, 0, 1, {'reward':'grasp not over blanket'}
 
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
         # for a in anchor_idx:
@@ -113,7 +114,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * compute rewards
         reward_uncover_target = self.uncover_target_reward(data)
         reward_uncover_nontarget = self.uncover_nontarget_reward(data)
-        reward_distance_btw_grasp_release = -1500 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
+        reward_distance_btw_grasp_release = -100*(self.total_nontarget_point_count/self.total_target_point_count) if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
         reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
         # * sum and weight rewards from individual functions to get overall reward
         reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
