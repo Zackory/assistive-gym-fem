@@ -45,6 +45,8 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # * get rid of any nontarget points that are not covered by the initial state of the blanket (will not be considered in reward calculation at the end of the step)
         self.non_target_initially_uncovered(data)
+        head_points = len(self.points_pos_nontarget_limb_world[self.human.head])
+        point_counts = [self.total_target_point_count, self.total_nontarget_point_count-head_points, head_points]
         
         # initial_uncovered_target = self.uncover_target_reward(data)
         # initial_uncovered_nontarget = self.uncover_nontarget_reward(data)
@@ -58,7 +60,8 @@ class BeddingManipulationEnv(AssistiveEnv):
             dist.append(d)
         # * if no points on the blanket are within 2.8 cm of the grasp location, immediately exit with reward = 0
         if not np.any(np.array(dist) < 0.028):
-            return obs, 0, 1, {'reward':'grasp not over blanket'}
+            info = {'split_reward':None, 'total_point_counts':point_counts, 'post_action_point_counts':[0,0,0]}
+            return obs, 0, 1, info
 
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
         # for a in anchor_idx:
@@ -112,10 +115,10 @@ class BeddingManipulationEnv(AssistiveEnv):
         data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
 
         # * compute rewards
-        reward_uncover_target = self.uncover_target_reward(data)
-        reward_uncover_nontarget = self.uncover_nontarget_reward(data)
+        reward_uncover_target, uncovered_target_count = self.uncover_target_reward(data)
+        reward_uncover_nontarget, uncovered_nontarget_count = self.uncover_nontarget_reward(data)
         reward_distance_btw_grasp_release = -100*(self.total_nontarget_point_count/self.total_target_point_count) if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
-        reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
+        reward_head_kept_uncovered, covered_head_count = self.keep_head_uncovered_reward(data)
         # * sum and weight rewards from individual functions to get overall reward
         reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
         
@@ -124,9 +127,9 @@ class BeddingManipulationEnv(AssistiveEnv):
             print("overall reward: ", reward)
 
         split_reward = [reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered]
-        point_counts = [self.total_target_point_count, self.total_nontarget_point_count, len(self.points_pos_nontarget_limb_world[self.human.head])]
+        post_action_point_counts = [uncovered_target_count, uncovered_nontarget_count, covered_head_count]
 
-        info = {'split_reward':split_reward, 'point_counts':point_counts}
+        info = {'split_reward':split_reward, 'total_point_counts':point_counts,'post_action_point_counts': post_action_point_counts}
         self.iteration += 1
         done = self.iteration >= 1
 
@@ -164,7 +167,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             print("total_target points:", total_points)
             print("target uncovered:", points_uncovered)
 
-        return (points_uncovered/total_points)*100
+        return (points_uncovered/total_points)*100, points_uncovered
 
     def uncover_nontarget_reward(self, blanket_state):
         '''
@@ -203,7 +206,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             print("nontarget uncovered:", points_uncovered)
 
         # if the same number of target and nontarget points are uncovered, total reward is 0
-        return -(points_uncovered/total_target_points)*100
+        return -(points_uncovered/total_target_points)*100, points_uncovered
         
     def keep_head_uncovered_reward(self, blanket_state):
         '''
@@ -233,7 +236,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             print("points on head covered", points_covered)
         
         # penalize on double the percentage of head points covered (doubled to increase weight of covering the head)
-        return -(points_covered/total_points)*200
+        return -(points_covered/total_points)*200, points_covered
 
     def non_target_initially_uncovered(self, blanket_state):
         '''
