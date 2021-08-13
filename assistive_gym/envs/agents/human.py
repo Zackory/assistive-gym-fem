@@ -96,13 +96,15 @@ class Human(Agent):
         # 3: right foot, 4: right shin, 5: right thigh
         # 6: left hand, 7: left forearm, 8: left upperarm
         # 9: left foot, 10: left shin, 11: left thigh
-        # 12: both shins
+        # 12: both shins, 13: whole torso, 14: both legs
+        # 15: whole body
         self.all_possible_target_limbs = [
             [limbs[0]], limbs[0:2], limbs[0:3], 
             [limbs[3]], limbs[3:5], limbs[3:6],
             [limbs[6]], limbs[6:8], limbs[6:9],
             [limbs[9]], limbs[9:11], limbs[9:12],
-            [ 39, 36, 46, 43], [18, 16, 14, 28, 26, 24, 2, 5, 8]]
+            [39, 36, 46, 43], [18, 16, 14, 28, 26, 24, 2, 5, 8], [39, 36, 46, 43, 35, 42],
+            [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42, 2, 5, 8]]
 
 
         self.body_info = {}
