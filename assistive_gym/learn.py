@@ -5,6 +5,7 @@ from ray.rllib.agents import ppo, sac, ddpg, impala
 from ray.rllib.agents.ppo import appo
 from ray.tune.logger import pretty_print
 from numpngw import write_apng
+import pathlib, pickle,time
 
 
 
@@ -164,65 +165,73 @@ def render_policy(env, env_name, algo, policy_path, coop=False, colab=False, see
         write_apng(filename, frames, delay=100)
         return filename
 
+#! has been significantly modified for evaluting bm policies
 def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, seed=0, verbose=False, extra_configs={}):
     ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
     env = make_env(env_name, coop, seed=seed)
     test_agent, _ = load_policy(env, algo, env_name, policy_path, coop, seed, extra_configs)
 
-    rewards = []
-    forces = []
-    task_successes = []
-    for episode in range(n_episodes):
-        obs = env.reset()
-        done = False
-        reward_total = 0.0
-        if env !=  'BeddingManipulationSphere-v1':
-            force_list = []
-            task_success = 0.0
-        while not done:
-            if coop:
-                # Compute the next action for the robot/human using the trained policies
-                action_robot = test_agent.compute_action(obs['robot'], policy_id='robot')
-                action_human = test_agent.compute_action(obs['human'], policy_id='human')
-                # Step the simulation forward using the actions from our trained policies
-                obs, reward, done, info = env.step({'robot': action_robot, 'human': action_human})
-                reward = reward['robot']
-                done = done['__all__']
-                info = info['robot']
-            else:
-                action = test_agent.compute_action(obs)
-                obs, reward, done, info = env.step(action)
-            reward_total += reward
-            if env !=  'BeddingManipulationSphere-v1':
-                force_list.append(info['total_force_on_human'])
-                task_success = info['task_success']
+    current_dir = os.getcwd()
+    pkl_loc = os.path.join(current_dir,'bm_eval')
+    pathlib.Path(pkl_loc).mkdir(parents=True, exist_ok=True)
+    filename = f"evalData_{policy_path.split('/')[-1]}"
+    f = open(os.path.join(pkl_loc, filename +".pkl"),"wb")
+    eval_t0 = time.time()
 
-        rewards.append(reward_total)
-        if env !=  'BeddingManipulationSphere-v1':
-            forces.append(np.mean(force_list))
-            task_successes.append(task_success)
+    rewards = []
+    grasp_not_over_blanket_count = 0
+    uncovered_target = []
+    uncovered_nontarget = []
+    covered_head = []
+
+    for episode in range(n_episodes):
+
+        t0 = time.time()
+        obs = env.reset()
+
+        action = test_agent.compute_action(obs)
+        obs, reward, done, info = env.step(action)
+        t1 = time.time()
+
+        total_elapsed_time = t1-eval_t0
+        elapsed_time = t1-t0
+
+        if info['split_reward'] is None:
+            grasp_not_over_blanket_count += 1
+
+        uncovered_target_count, uncovered_nontarget_count, covered_head_count = info['post_action_point_counts']
+
+        rewards.append(reward)
+        uncovered_target.append(uncovered_target_count)
+        uncovered_nontarget.append(uncovered_nontarget_count)
+        covered_head.append(covered_head_count)
+    
+        pickle.dump({
+            "total_elapsed_time":total_elapsed_time, 
+            "action": action,
+            "reward": reward, 
+            "observation":obs,
+            "elapsed_time": elapsed_time,
+            "info":info}, f)
+
         if verbose:
-            if env == 'BeddingManipulationSphere-v1':
-                print('Reward total: %.2f' % (reward_total))
-            else:
-                print('Reward total: %.2f, mean force: %.2f, task success: %r' % (reward_total, np.mean(force_list), task_success))
+            print(f'Reward total: {reward}, info: {info}')
         sys.stdout.flush()
+
     env.disconnect()
 
     print('\n', '-'*50, '\n')
     # print('Rewards:', rewards)
     print('Reward Mean:', np.mean(rewards))
     print('Reward Std:', np.std(rewards))
+    print('Mean Uncovered Target:', np.mean(uncovered_target))
+    print('Mean Uncovered NonTarget:', np.mean(uncovered_nontarget))
+    print('Mean Covered Head:', np.mean(covered_head))
+    print('Number of cases where grasp not over blanket:', grasp_not_over_blanket_count)
 
-    if env !=  'BeddingManipulationSphere-v1':
-        # print('Forces:', forces)
-        print('Force Mean:', np.mean(forces))
-        print('Force Std:', np.std(forces))
 
-        # print('Task Successes:', task_successes)
-        print('Task Success Mean:', np.mean(task_successes))
-        print('Task Success Std:', np.std(task_successes))
     sys.stdout.flush()
+    f.close()
 
 
 if __name__ == '__main__':
