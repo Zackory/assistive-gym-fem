@@ -215,7 +215,7 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
             "info":info}, f)
 
         if verbose:
-            print(f'Reward total: {reward}, info: {info}')
+            print(f"Episode {episode+1} | Reward total: {reward}, Total Counts: {info['total_point_counts']}, Post Action: {info['post_action_point_counts']}")
         sys.stdout.flush()
 
     env.disconnect()
