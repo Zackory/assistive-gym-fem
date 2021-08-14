@@ -20,7 +20,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.take_pictures = False
         self.rendering = False
         self.fixed_target = True
-        self.target_limb_code = 13
+        self.target_limb_code = 8
         self.fixed_pose = False
         self.seed_val = 1001
         self.save_pstate = False
@@ -182,7 +182,7 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # account for case where all nontarget points were initially uncovered
         if total_points == 0:
-            return 0
+            return 0, 0
 
         # count number of target points covered by the blanket
         for limb, points_pos_nontarget_limb_world in self.points_pos_nontarget_limb_world.items():
