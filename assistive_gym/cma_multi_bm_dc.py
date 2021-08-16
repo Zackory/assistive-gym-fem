@@ -56,7 +56,8 @@ if __name__ == "__main__":
     # * make the enviornment, set the specified target limb code and an initial seed value
     env = gym.make(args.env)
     env.set_seed_val(seeding.create_seed())
-    env.set_target_limb_code(4)
+    target_limb = 4
+    env.set_target_limb_code(target_limb)
 
     # * set the number of processes to 1/4 of the total number of cpus
     # *     collect data for 4 different target limbs simultaneously by running this script in 4 terminals
@@ -145,6 +146,6 @@ if __name__ == "__main__":
             print()
 
             env.set_seed_val(seeding.create_seed())
-            env.set_target_limb_code(4)
+            env.set_target_limb_code(target_limb)
             pose_count += 1
 
