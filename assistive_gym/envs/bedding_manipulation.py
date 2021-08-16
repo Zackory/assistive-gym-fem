@@ -20,7 +20,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.take_pictures = False
         self.rendering = False
         self.fixed_target = True
-        self.target_limb_code = 8
+        self.target_limb_code = 4
         self.fixed_pose = False
         self.seed_val = 1001
         self.save_pstate = False
@@ -280,20 +280,24 @@ class BeddingManipulationEnv(AssistiveEnv):
     def _get_obs(self, agent=None):
 
         if self.fixed_target:
+            pose = []
+            for limb in self.human.obs_limbs:
+                pos, orient = self.human.get_pos_orient(limb)
+                # print("pose", limb, pos, orient)
+                pos2D = pos[0:2]
+                yaw = p.getEulerFromQuaternion(orient)[-1]
+                pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
+            pose = np.concatenate(pose, axis=0)
+
             if self.cmaes_dc:
+
+                output = [None]*12
                 all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
                 all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
-                return (all_joint_angles, all_pos_orient)
-            else:
-                pose = []
-                for limb in self.human.obs_limbs:
-                    pos, orient = self.human.get_pos_orient(limb)
-                    # print("pose", limb, pos, orient)
-                    pos2D = pos[0:2]
-                    yaw = p.getEulerFromQuaternion(orient)[-1]
-                    pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
-                pose = np.concatenate(pose, axis=0)
-                return pose
+                output[0], output[1], output[2] = pose, all_joint_angles, all_pos_orient
+                return output
+
+            return pose
 
             
         else:
