@@ -58,10 +58,10 @@ class BeddingManipulationEnv(AssistiveEnv):
             v = np.array(v)
             d = np.linalg.norm(v[0:2] - grasp_loc)
             dist.append(d)
-        # * if no points on the blanket are within 2.8 cm of the grasp location, immediately exit with reward = 0
+        # * if no points on the blanket are within 2.8 cm of the grasp location, track that it would have been clipped
+        clipped = False
         if not np.any(np.array(dist) < 0.028):
-            info = {'split_reward':None, 'total_point_counts':point_counts, 'post_action_point_counts':[0,0,0]}
-            return obs, 0, 1, info
+            clipped = True
 
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
         # for a in anchor_idx:
@@ -129,7 +129,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         split_reward = [reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered]
         post_action_point_counts = [uncovered_target_count, uncovered_nontarget_count, covered_head_count]
 
-        info = {'split_reward':split_reward, 'total_point_counts':point_counts,'post_action_point_counts': post_action_point_counts}
+        info = {'split_reward':split_reward, 'total_point_counts':point_counts,'post_action_point_counts': post_action_point_counts, 'clipped':clipped}
         self.iteration += 1
         done = self.iteration >= 1
 
