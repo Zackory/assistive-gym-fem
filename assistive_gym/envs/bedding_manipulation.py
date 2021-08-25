@@ -117,7 +117,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * compute rewards
         reward_uncover_target, uncovered_target_count = self.uncover_target_reward(data)
         reward_uncover_nontarget, uncovered_nontarget_count = self.uncover_nontarget_reward(data)
-        reward_distance_btw_grasp_release = -100*(self.total_nontarget_point_count/self.total_target_point_count) if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
+        reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
         reward_head_kept_uncovered, covered_head_count = self.keep_head_uncovered_reward(data)
         # * sum and weight rewards from individual functions to get overall reward
         reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
