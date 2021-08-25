@@ -196,7 +196,7 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
         total_elapsed_time = t1-eval_t0
         elapsed_time = t1-t0
 
-        if info['split_reward'] is None:
+        if info['clipped']:
             grasp_not_over_blanket_count += 1
 
         uncovered_target_count, uncovered_nontarget_count, covered_head_count = info['post_action_point_counts']
