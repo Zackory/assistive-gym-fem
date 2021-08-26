@@ -74,6 +74,7 @@ if __name__ == "__main__":
     reward_threshold = 95
 
     pose_count = 1
+    total_fevals = 0
 
     # * repeat optimization for x number of human poses
     for _ in range(200):
@@ -83,7 +84,7 @@ if __name__ == "__main__":
         env.set_pstate_file(os.path.join(pstate_loc, filename +".bullet"))
 
 
-        print(f"Pose number: {pose_count}, target limb code: {env.target_limb_code}, enviornment seed: {env.seed_val}")
+        print(f"Pose number: {pose_count}, total fevals: {total_fevals}, target limb code: {env.target_limb_code}, enviornment seed: {env.seed_val}")
         fevals = 0
         iterations = 0
         t0 = time.time()
@@ -97,6 +98,7 @@ if __name__ == "__main__":
             while not es.stop():
                 iterations += 1
                 fevals += num_proc
+                total_fevals += num_proc
                 
                 actions = es.ask()
                 output = eval_all(actions)
@@ -119,7 +121,7 @@ if __name__ == "__main__":
                 # if iterations == 1: costs = [-95]
                 # iterations = 300
 
-                print(f"Pose: {pose_count}, iteration: {iterations}, fevals: {fevals}, elapsed time: {total_elapsed_time:.2f}, mean reward = {mean:.2f}, min/max reward = {min:.2f}/{max:.2f}")
+                print(f"Pose: {pose_count}, iteration: {iterations}, total fevals: {total_fevals}, fevals: {fevals}, elapsed time: {total_elapsed_time:.2f}, mean reward = {mean:.2f}, min/max reward = {min:.2f}/{max:.2f}")
                 pickle.dump({
                     "seed": env.seed_val,
                     "target_limb": env.target_limb_code, 
