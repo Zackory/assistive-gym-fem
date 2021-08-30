@@ -6,6 +6,7 @@ from ray.rllib.agents.ppo import appo
 from ray.tune.logger import pretty_print
 from numpngw import write_apng
 import pathlib, pickle,time
+import keras
 
 
 
@@ -167,9 +168,14 @@ def render_policy(env, env_name, algo, policy_path, coop=False, colab=False, see
 
 #! has been significantly modified for evaluting bm policies
 def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, seed=0, verbose=False, extra_configs={}):
-    ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
-    env = make_env(env_name, coop, seed=seed)
-    test_agent, _ = load_policy(env, algo, env_name, policy_path, coop, seed, extra_configs)
+    if algo == 'cmaes':
+        print('CMA-ES EVALUATION', policy_path)
+        env = make_env(env_name, coop, seed=seed)
+        model = keras.models.load_model(policy_path)
+    else:
+        ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
+        env = make_env(env_name, coop, seed=seed)
+        test_agent, _ = load_policy(env, algo, env_name, policy_path, coop, seed, extra_configs)
 
     current_dir = os.getcwd()
     pkl_loc = os.path.join(current_dir,'bm_eval')
@@ -189,7 +195,12 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
         t0 = time.time()
         obs = env.reset()
 
-        action = test_agent.compute_action(obs)
+        if algo == 'cmaes':
+            obs = np.reshape(obs, (-1, 12))
+            action = model.predict(obs)[0]
+        else:
+            action = test_agent.compute_action(obs)
+
         obs, reward, done, info = env.step(action)
         t1 = time.time()
 
