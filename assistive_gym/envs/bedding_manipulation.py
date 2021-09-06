@@ -26,6 +26,7 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.save_pstate = False
         self.pstate_file = None
         self.cmaes_dc = False
+        self.blanket_pose_var = True
 
     def step(self, action):
         obs = self._get_obs()
@@ -411,7 +412,14 @@ class BeddingManipulationEnv(AssistiveEnv):
         p.changeVisualShape(self.blanket, -1, rgbaColor=[0, 0, 1, 0.75], flags=0, physicsClientId=self.id)
         p.changeVisualShape(self.blanket, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
         p.setPhysicsEngineParameter(numSubSteps=4, numSolverIterations = 4, physicsClientId=self.id)
-        p.resetBasePositionAndOrientation(self.blanket, [0, 0.2, 1.5], self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)
+        if self.blanket_pose_var:
+            delta_y = self.np_random.uniform(-0.05, 0.05)
+            delta_x = self.np_random.uniform(-0.02, 0.02)
+            delta_rad = self.np_random.uniform(-0.0872665, 0.0872665) # 5 degrees
+
+            p.resetBasePositionAndOrientation(self.blanket, [0+delta_x, 0.2+delta_y, 1.5], self.get_quaternion([np.pi/2.0, 0, 0+delta_rad]), physicsClientId=self.id)
+        else:
+            p.resetBasePositionAndOrientation(self.blanket, [0, 0.2, 1.5], self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)
 
 
         # * Drop the blanket on the person, allow to settle
