@@ -1,4 +1,4 @@
-import os, time
+import os, time, argparse
 import numpy as np
 from numpy.lib.function_base import append
 import pybullet as p
@@ -16,25 +16,63 @@ class BeddingManipulationEnv(AssistiveEnv):
         if robot is None:
             super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=12, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
-        
-        self.take_pictures = False
-        self.rendering = False
-        self.fixed_target = True
-        self.target_limb_code = 4
-        self.fixed_pose = False
+
+        parser = argparse.ArgumentParser(description='Bedding Manipulation Enviornment')
+        parser.add_argument('--target-limb-code', type=int, required=True,
+                            help='Code for target limb to uncover, see human.py for a list of available target codes')
+        parser.add_argument('--render-body-points', action='store_true', default=False,
+                            help='Render points on the body. Points still exist even if not rendered')
+        parser.add_argument('--verbose', action='store_true', default=False,
+                            help='More verbose prints')
+        parser.add_argument('--take-images', action='store_true', default=False,
+                            help='Enable taking images during rollout')
+        parser.add_argument('--save-image-dir', default='./saved_images',
+                            help='Directory to save images to')
+        parser.add_argument('--fixed-human-pose', action='store_true', default=False,
+                            help='Fixed human pose between rollouts')
+        parser.add_argument('--vary-blanket-pose', action='store_true', default=False,
+                            help='Introduce variation to the initial configuration of the blanket.')
+        parser.add_argument('--vary-body-shape', action='store_true', default=False,
+                            help='Introduce variation to human body shape.')
+        parser.add_argument('--cmaes-data-collect', action='store_true', default=False,
+                            help='Whether to evaluate a trained policy over n_episodes')
+        parser.add_argument('--evaluate', action='store_true', default=False,
+                            help='Whether to evaluate a trained policy over n_episodes')
+        args, unknown = parser.parse_known_args()
+
+        if args.target_limb_code == 'random':
+            self.fixed_target_limb = False
+        else:
+            self.fixed_target_limb = True
+            self.target_limb_code = args.target_limb_code
+
+        self.body_shape = None if args.vary_body_shape else np.zeros((1, 10))
+
+        if args.take_images:
+            self.take_images = True
+            self.save_image_dir = args.save_image_dir
+
+        # * all the parameters below are False unless spepcified otherwise by args
+        self.render_body_points = args.render_body_points
+        self.fixed_pose = args.fixed_human_pose
+        self.verbose = (args.verbose and not args.evaluate)
+        self.blanket_pose_var = args.vary_blanket_pose
+        self.take_images = args.take_images
+        self.cmaes_dc = args.cmaes_data_collect
+
+        # * these parameters don't have cmd args to modify them
         self.seed_val = 1001
         self.save_pstate = False
         self.pstate_file = None
-        self.cmaes_dc = False
-        self.blanket_pose_var = True
+
 
     def step(self, action):
         obs = self._get_obs()
 
-        # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
-        if self.rendering:
-            print(obs)
-            print(action)
+        if self.verbose:
+            print("Target Limb Code:", self.target_limb_code)
+            print("Observation:\n", obs)
+            print("Action: ", action)
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
         scale = [0.44, 1.05]
@@ -48,10 +86,6 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.non_target_initially_uncovered(data)
         head_points = len(self.points_pos_nontarget_limb_world[self.human.head])
         point_counts = [self.total_target_point_count, self.total_nontarget_point_count-head_points, head_points]
-        
-        # initial_uncovered_target = self.uncover_target_reward(data)
-        # initial_uncovered_nontarget = self.uncover_nontarget_reward(data)
-        # reward_head_kept_uncovered = self.keep_head_uncovered_reward(data)
 
         # * calculate distance between the 2D grasp location and every point on the blanket, anchor points are the 4 points on the blanket closest to the 2D grasp location
         dist = []
@@ -59,14 +93,14 @@ class BeddingManipulationEnv(AssistiveEnv):
             v = np.array(v)
             d = np.linalg.norm(v[0:2] - grasp_loc)
             dist.append(d)
+        anchor_idx = np.argpartition(np.array(dist), 4)[:4]
+        # for a in anchor_idx:
+            # print("anchor loc: ", data[1][a])
+
         # * if no points on the blanket are within 2.8 cm of the grasp location, track that it would have been clipped
         clipped = False
         if not np.any(np.array(dist) < 0.028):
             clipped = True
-
-        anchor_idx = np.argpartition(np.array(dist), 4)[:4]
-        # for a in anchor_idx:
-            # print("anchor loc: ", data[1][a])
 
         # * update grasp_loc var with the location of the central anchor point on the cloth
         grasp_loc = np.array(data[1][anchor_idx[0]][0:2])
@@ -78,8 +112,11 @@ class BeddingManipulationEnv(AssistiveEnv):
         for i in anchor_idx[1:]:
             pos_diff = np.array(data[1][i]) - np.array(data[1][anchor_idx[0]])
             constraint_ids.append(p.createSoftBodyAnchor(self.blanket, i, self.sphere_ee.body, -1, pos_diff))
+        
+        # * take image after blanket grasped
+        if self.take_images: self.capture_images()
 
-        # * move sphere up by some delta z
+        # * move sphere 40 cm from the top of the bed
         current_pos = self.sphere_ee.get_base_pos_orient()[0]
         delta_z = 0.4                           # distance to move up (with respect to the top of the bed)
         bed_height = 0.58                       # height of the bed
@@ -88,6 +125,9 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.sphere_ee.set_base_pos_orient(current_pos + np.array([0, 0, 0.005]), np.array([0,0,0]))
             p.stepSimulation(physicsClientId=self.id)
             current_pos = self.sphere_ee.get_base_pos_orient()[0]
+        
+        # * take image after blanket lifted up by 40 cm
+        if self.take_images: self.capture_images()
 
         # * move sphere to the release location, release the blanket
         travel_dist = release_loc - grasp_loc
@@ -105,12 +145,18 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * continue stepping simulation to allow the cloth to settle before release
         for _ in range(20):
             p.stepSimulation(physicsClientId=self.id)
+        
+        # * take image after moving to grasp location, before releasing cloth
+        if self.take_images: self.capture_images()
 
         # * release the cloth at the release point, sphere is at the same arbitrary z position in the air
         for i in constraint_ids:
             p.removeConstraint(i, physicsClientId=self.id)
         for _ in range(50):
             p.stepSimulation(physicsClientId=self.id)
+
+        # * take image after cloth is released and settled
+        if self.take_images: self.capture_images()
 
         # * get points on the blanket, final state of the cloth
         data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
@@ -123,16 +169,20 @@ class BeddingManipulationEnv(AssistiveEnv):
         # * sum and weight rewards from individual functions to get overall reward
         reward = self.config('uncover_target_weight')*reward_uncover_target + self.config('uncover_nontarget_weight')*reward_uncover_nontarget + self.config('grasp_release_distance_max_weight')*reward_distance_btw_grasp_release + self.config('keep_head_uncovered_weight')*reward_head_kept_uncovered
         
-        if self.rendering:
-            print("rewards for each measure:", reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered)
+        if self.verbose:
+            print(f"Rewards for each measure:\n\tUncover Target: {reward_uncover_target}, Uncover Nontarget: {reward_uncover_nontarget}, Cover Head: {reward_head_kept_uncovered}, Excessive Distance: {reward_distance_btw_grasp_release}")
             print("overall reward: ", reward)
 
+        # * prepare info
         split_reward = [reward_uncover_target, reward_uncover_nontarget, reward_distance_btw_grasp_release, reward_head_kept_uncovered]
         post_action_point_counts = [uncovered_target_count, uncovered_nontarget_count, covered_head_count]
-
         info = {'split_reward':split_reward, 'total_point_counts':point_counts,'post_action_point_counts': post_action_point_counts, 'clipped':clipped}
+
         self.iteration += 1
         done = self.iteration >= 1
+
+        # * take image after reward computed
+        if self.take_images: self.capture_images()
 
         # return 0, 0, 1, {}
         return obs, reward, done, info
@@ -159,14 +209,13 @@ class BeddingManipulationEnv(AssistiveEnv):
                         covered = True
                         points_covered += 1
                         break
-                if self.rendering:
+                if self.render_body_points:
                     rgb = covered_rgb if covered else uncovered_rgb
                     self.change_point_color(self.points_target_limb, limb, point, rgb = rgb)
         points_uncovered = total_points - points_covered
 
-        if self.rendering:
-            print("total_target points:", total_points)
-            print("target uncovered:", points_uncovered)
+        if self.verbose:
+            print(f"Total Target Points: {total_points}, Target Uncovered: {points_uncovered}")
 
         return (points_uncovered/total_points)*100, points_uncovered
 
@@ -197,14 +246,13 @@ class BeddingManipulationEnv(AssistiveEnv):
                             points_covered += 1
                             break
                     # print("limb", limb, "covered", covered)
-                    if self.rendering:
+                    if self.render_body_points:
                         rgb = covered_rgb if covered else uncovered_rgb
                         self.change_point_color(self.points_nontarget_limb, limb, point, rgb = rgb)
         points_uncovered = total_points - points_covered
         
-        if self.rendering:
-            print("total nontarget points:", total_points)
-            print("nontarget uncovered:", points_uncovered)
+        if self.verbose:
+            print(f"Total Nontarget Points: {total_points}, Nontarget Uncovered: {points_uncovered}")
 
         # if the same number of target and nontarget points are uncovered, total reward is 0
         return -(points_uncovered/total_target_points)*100, points_uncovered
@@ -228,13 +276,12 @@ class BeddingManipulationEnv(AssistiveEnv):
                     covered = True
                     points_covered += 1
                     break
-            if self.rendering:
+            if self.render_body_points:
                 rgb = covered_rgb if covered else uncovered_rgb
                 self.change_point_color(self.points_nontarget_limb, self.human.head, point, rgb = rgb)
 
-        if self.rendering:
-            print("total points on head:", total_points)
-            print("points on head covered", points_covered)
+        if self.verbose:
+            print(f"Total Head Points: {total_points}, Covered Head Points: {points_covered}")
         
         # penalize on double the percentage of head points covered (doubled to increase weight of covering the head)
         return -(points_covered/total_points)*200, points_covered
@@ -270,7 +317,7 @@ class BeddingManipulationEnv(AssistiveEnv):
                 # print("count of points on nontarget initially:", len(self.points_pos_nontarget_limb_world[limb]), len(self.points_nontarget_limb[limb]))
                 for point in reversed(points_to_remove[limb]):
                     self.points_pos_nontarget_limb_world[limb].pop(point)
-                    if self.rendering:
+                    if self.render_body_points:
                         p.removeBody(self.points_nontarget_limb[limb][point].body)
                         self.points_nontarget_limb[limb].pop(point)
                 # print("count of points on nontarget now:", len(self.points_pos_nontarget_limb_world[limb]), len(self.points_nontarget_limb[limb]))
@@ -279,34 +326,23 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.total_nontarget_point_count -= points_to_remove_count
 
     def _get_obs(self, agent=None):
+        pose = []
+        for limb in self.human.obs_limbs:
+            pos, orient = self.human.get_pos_orient(limb)
+            # print("pose", limb, pos, orient)
+            pos2D = pos[0:2]
+            yaw = p.getEulerFromQuaternion(orient)[-1]
+            pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
+        pose = np.concatenate(pose, axis=0)
+        # * collect more infomation for cmaes data collect, enables you to train model with different observations if you want to
+        if self.cmaes_dc:
+            output = [None]*12
+            all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
+            all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
+            output[0], output[1], output[2] = pose, all_joint_angles, all_pos_orient
+            return output
 
-        if self.fixed_target:
-            pose = []
-            for limb in self.human.obs_limbs:
-                pos, orient = self.human.get_pos_orient(limb)
-                # print("pose", limb, pos, orient)
-                pos2D = pos[0:2]
-                yaw = p.getEulerFromQuaternion(orient)[-1]
-                pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
-            pose = np.concatenate(pose, axis=0)
-
-            if self.cmaes_dc:
-
-                output = [None]*12
-                all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
-                all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
-                output[0], output[1], output[2] = pose, all_joint_angles, all_pos_orient
-                return output
-
-            return pose
-
-            
-        else:
-            #! REVISIT THIS
-            selected_target_limb = np.zeros(12)
-            selected_target_limb[self.target_limb_code] = 1
-            human_limb_pos = np.concatenate([self.human.get_pos_orient(joint) for joint in self.human.all_joint_indices]).ravel()
-            return selected_target_limb + human_limb_pos
+        return pose
 
     def set_seed_val(self, seed = 1001):
         if seed != self.seed_val:
@@ -324,16 +360,21 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.save_pstate = True
 
     def reset(self):
-
         super(BeddingManipulationEnv, self).reset()
+
         if not self.fixed_pose and not self.cmaes_dc:
             self.set_seed_val(seeding.create_seed())
         self.seed(self.seed_val)
 
-        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
+        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
 
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
+        # * configure directory to save captured images to
+        if self.take_images:
+            self.image_dir = os.path.join(self.save_image_dir, time.strftime("%Y%m%d-%H%M%S"))
+            if not os.path.exists(self.image_dir):
+                os.makedirs(self.image_dir)
 
         # * Setup human in the air, with legs and arms slightly seperated
         joints_positions = [(self.human.j_left_hip_y, -10), (self.human.j_right_hip_y, 10), (self.human.j_left_shoulder_x, -20), (self.human.j_right_shoulder_x, 20)]
@@ -375,8 +416,12 @@ class BeddingManipulationEnv(AssistiveEnv):
         self.human.control(self.human.all_joint_indices, self.human.get_joint_angles(), 0.05, 100)
         self.human.set_mass(self.human.base, mass=0)
         self.human.set_base_velocity(linear_velocity=[0, 0, 0], angular_velocity=[0, 0, 0])
+
+        # * take image after human settles
+        if self.take_images: self.capture_images()
         
         if self.use_mesh:
+            # * we do not use a mesh in this work
             # Replace the capsulized human with a human mesh
             self.human = HumanMesh()
             joints_positions = [(self.human.j_right_shoulder_z, 60), (self.human.j_right_elbow_y, 90), (self.human.j_left_shoulder_z, -10), (self.human.j_left_elbow_y, -90), (self.human.j_right_hip_x, -60), (self.human.j_right_knee_x, 80), (self.human.j_left_hip_x, -90), (self.human.j_left_knee_x, 80)]
@@ -387,24 +432,14 @@ class BeddingManipulationEnv(AssistiveEnv):
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])
  
-        # * select a target limb to uncover (may be fixed or random) 
-        if not self.fixed_target:
+        # * select a target limb to uncover (may be fixed or random), generate points along the body accordingly
+        if not self.fixed_target_limb:
             self.set_target_limb_code()
         self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
-
-        # print(self._get_obs())
-        # return 0
-
-        # #! NEED TO MOVE THIS
-        # if self.save_pstate:
-        #     p.saveBullet(self.pstate_file)
-        #     self.save_pstate = False
-
-        # # print(self.human.get_joint_angles(self.human.all_joint_indices))
-        # time.sleep(2)
-        # return 0
-
         self.generate_points_along_body()
+
+        # * take image after points generated (only visible if --render_body_points flag is used)
+        if self.take_images: self.capture_images()
        
         # * spawn blanket
         self.blanket = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'blanket_2089v.obj'), scale=0.75, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.0005, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.006, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
@@ -412,11 +447,11 @@ class BeddingManipulationEnv(AssistiveEnv):
         p.changeVisualShape(self.blanket, -1, rgbaColor=[0, 0, 1, 0.75], flags=0, physicsClientId=self.id)
         p.changeVisualShape(self.blanket, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
         p.setPhysicsEngineParameter(numSubSteps=4, numSolverIterations = 4, physicsClientId=self.id)
+
         if self.blanket_pose_var:
             delta_y = self.np_random.uniform(-0.05, 0.05)
             delta_x = self.np_random.uniform(-0.02, 0.02)
-            delta_rad = self.np_random.uniform(-0.0872665, 0.0872665) # 5 degrees
-
+            delta_rad = self.np_random.uniform(-0.0872665, 0.0872665) # * +/- 5 degrees
             p.resetBasePositionAndOrientation(self.blanket, [0+delta_x, 0.2+delta_y, 1.5], self.get_quaternion([np.pi/2.0, 0, 0+delta_rad]), physicsClientId=self.id)
         else:
             p.resetBasePositionAndOrientation(self.blanket, [0, 0.2, 1.5], self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)
@@ -427,19 +462,13 @@ class BeddingManipulationEnv(AssistiveEnv):
         for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
 
-
-        # data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
-        # self.non_target_initially_uncovered(data)
-        # self.uncover_nontarget_reward(data)
-
     
         # * Initialize enviornment variables
         # *     if using the sphere manipulator, spawn the sphere and run a modified version of init_env_variables()
-        # self.time = time.time()
         if self.robot is None:
             # * spawn sphere manipulator
             position = np.array([-0.3, -0.86, 0.8])
-            self.sphere_ee = self.create_sphere(radius=0.01, mass=0.0, pos = position, visual=True, collision=True, rgba=[0, 0, 0, 1])
+            self.sphere_ee = self.create_sphere(radius=0.025, mass=0.0, pos = position, visual=True, collision=True, rgba=[1, 0, 0, 1])
             
             # * initialize env variables
             from gym import spaces
@@ -464,15 +493,8 @@ class BeddingManipulationEnv(AssistiveEnv):
             p.saveBullet(self.pstate_file)
             self.save_pstate = False
         
-        
-        # * Setup camera for taking images
-        # *     Currently saves color images only to specified directory
-        if self.take_pictures == True:
-            self.setup_camera_rpy(camera_target=[0, 0, 0.305+2.101], distance=0.01, rpy=[0, -90, 180], fov=60, camera_width=468//2, camera_height=398)
-            img, depth = self.get_camera_image_depth()
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            filename = time.strftime("%Y%m%d-%H%M%S") + '.png'
-            cv2.imwrite(os.path.join('/home/mycroft/git/vBMdev/pose_variation_images/lower_var2', filename), img)
+        # * image after blanket settles, before grasp
+        if self.take_images: self.capture_images()
             
         return self._get_obs()
 
@@ -504,13 +526,13 @@ class BeddingManipulationEnv(AssistiveEnv):
             # *     generates list of point positions around the body part capsule (sphere if the hands)
             # *     creates all the spheres necessary to uniformly cover the body part (spheres created at some arbitrary position (transformed to correct location in update_points_along_body())
             # *     add to running total of target/nontarget points
-            # *     only generate sphere bodies if self.rendering == True
+            # *     only generate sphere bodies if self.render_body_points == True
             if limb in self.target_limb:
                 if limb in [self.human.left_hand, self.human.right_hand]:
                     self.points_pos_on_target_limb[limb] = self.util.sphere_points(radius=radius, samples = 20)
                 else:
                     self.points_pos_on_target_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-                if self.rendering:
+                if self.render_body_points:
                     self.points_target_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_target_limb[limb]), visual=True, collision=False, rgba=[1, 1, 1, 1])
                 self.total_target_point_count += len(self.points_pos_on_target_limb[limb])
             else:
@@ -518,7 +540,7 @@ class BeddingManipulationEnv(AssistiveEnv):
                     self.points_pos_on_nontarget_limb[limb] = self.util.sphere_points(radius=radius, samples = 20)
                 else:
                     self.points_pos_on_nontarget_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-                if self.rendering:
+                if self.render_body_points:
                     self.points_nontarget_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_nontarget_limb[limb]), visual=True, collision=False, rgba=[0, 0, 1, 1])
                 self.total_nontarget_point_count += len(self.points_pos_on_nontarget_limb[limb])
 
@@ -551,14 +573,14 @@ class BeddingManipulationEnv(AssistiveEnv):
                 for i in range(len(self.points_pos_on_target_limb[limb])):
                     point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, self.points_pos_on_target_limb[limb][i], [0, 0, 0, 1], physicsClientId=self.id)[0])
                     points_pos_limb_world.append(point_pos)
-                    if self.rendering:
+                    if self.render_body_points:
                         self.points_target_limb[limb][i].set_base_pos_orient(point_pos, [0, 0, 0, 1])
                 self.points_pos_target_limb_world[limb] = points_pos_limb_world
             else:
                 for i in range(len(self.points_pos_on_nontarget_limb[limb])):
                     point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, self.points_pos_on_nontarget_limb[limb][i], [0, 0, 0, 1], physicsClientId=self.id)[0])
                     points_pos_limb_world.append(point_pos)
-                    if self.rendering:
+                    if self.render_body_points:
                         self.points_nontarget_limb[limb][i].set_base_pos_orient(point_pos, [0, 0, 0, 1])
                 self.points_pos_nontarget_limb_world[limb] = points_pos_limb_world
 
@@ -566,7 +588,25 @@ class BeddingManipulationEnv(AssistiveEnv):
         '''
         Allow more variation in the knee and elbow angles
           can be some random position within the lower and upper limits of the joint movement (range is made a little smaller than the limits of the joint to prevent angles that are too extreme)
+        
+        NOT USED IN THIS WORK
         '''
         for joint in (self.human.j_left_knee, self.human.j_right_knee, self.human.j_left_elbow, self.human.j_right_elbow):
             motor_indices, motor_positions, motor_velocities, motor_torques = self.human.get_motor_joint_states([joint])
             self.human.set_joint_angles(motor_indices, motor_positions+self.np_random.uniform(self.human.lower_limits[joint]+0.1, self.human.upper_limits[joint]-0.1, 1))
+
+
+    def capture_images(self):
+        # * top view
+        self.setup_camera_rpy(camera_target=[0, 0, 0.305+2.101], distance=0.01, rpy=[0, -90, 180], fov=60, camera_width=468//2, camera_height=410)
+        img, depth = self.get_camera_image_depth()
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        filename = f'top_view_{time.strftime("%Y%m%d-%H%M%S")}.png'
+        cv2.imwrite(os.path.join(self.image_dir, filename), img)
+
+        # * side view
+        self.setup_camera_rpy(camera_target=[0, 0, 1], distance=3, rpy=[0, -20, 120], fov=60, camera_width=468//2, camera_height=410)
+        img, depth = self.get_camera_image_depth()
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        filename = f'side_view_{time.strftime("%Y%m%d-%H%M%S")}.png'
+        cv2.imwrite(os.path.join(self.image_dir, filename), img)
