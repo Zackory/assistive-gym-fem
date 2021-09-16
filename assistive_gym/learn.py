@@ -273,7 +273,7 @@ if __name__ == '__main__':
                         help='Whether rendering should generate an animated png rather than open a window (e.g. when using Google Colab)')
     parser.add_argument('--verbose', action='store_true', default=False,
                         help='Whether to output more verbose prints')
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     coop = ('Human' in args.env)
     checkpoint_path = None
