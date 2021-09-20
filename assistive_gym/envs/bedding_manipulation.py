@@ -18,7 +18,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.use_mesh = use_mesh
 
         parser = argparse.ArgumentParser(description='Bedding Manipulation Enviornment')
-        parser.add_argument('--target-limb-code', type=int, required=True,
+        parser.add_argument('--target-limb-code', required=True,
                             help='Code for target limb to uncover, see human.py for a list of available target codes')
         parser.add_argument('--render-body-points', action='store_true', default=False,
                             help='Render points on the body. Points still exist even if not rendered')
@@ -44,7 +44,7 @@ class BeddingManipulationEnv(AssistiveEnv):
             self.fixed_target_limb = False
         else:
             self.fixed_target_limb = True
-            self.target_limb_code = args.target_limb_code
+            self.target_limb_code = int(args.target_limb_code)
 
         self.body_shape = None if args.vary_body_shape else np.zeros((1, 10))
 
