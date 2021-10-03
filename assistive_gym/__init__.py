@@ -36,6 +36,14 @@ register(
 )
 
 register(
+    id='ClothManipStretch-v1',
+    entry_point='assistive_gym.envs:ClothManipStretchEnv',
+    max_episode_steps=200,
+)
+
+
+'''
+register(
     id='BedPosePR2-v1',
     entry_point='assistive_gym.envs:BedPosePR2Env',
     max_episode_steps=200,
@@ -55,6 +63,7 @@ register(
     entry_point='assistive_gym.envs:BedPoseStretchMeshEnv',
     max_episode_steps=200,
 )
+'''
 
 
 register(

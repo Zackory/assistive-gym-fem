@@ -158,6 +158,7 @@ class HumanMesh(Agent):
         if self.skin_color == 'random':
             hsv = list(colorsys.rgb_to_hsv(0.8, 0.6, 0.4))
             hsv[-1] = np_random.uniform(0.4, 0.8)
+            hsv[-1] = 0.6
             self.skin_color = list(colorsys.hsv_to_rgb(*hsv)) + [1.0]
 
         if self.right_arm_vertex_indices is None:
