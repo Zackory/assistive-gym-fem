@@ -4,6 +4,12 @@
 #### See the [Wiki](https://github.com/Healthcare-Robotics/assistive-gym/wiki/7.-Google-Colab) for all available Google Colab examples.
 ***
 
+Note: to run `python3 igibson_example.py`, first install igibson2:
+```
+python3 -m pip install gibson2==1.0.1
+python3 -m gibson2.utils.assets_utils --download_ig_dataset
+```
+
 Assistive Gym is a physics-based simulation framework for physical human-robot interaction and robotic assistance.
 
 Assistive Gym is integrated into the OpenAI Gym interface, enabling the use of existing reinforcement learning and control algorithms to teach robots how to interact with people. 

@@ -148,7 +148,7 @@ class HumanMesh(Agent):
 
         return out_mesh, vertices, joints
 
-    def init(self, directory, id, np_random, gender='female', height=None, body_shape=None, joint_angles=[], position=[0, 0, 0], orientation=[0, 0, 0], skin_color='random', specular_color=[0.1, 0.1, 0.1], body_pose=None, out_mesh=None, vertices=None, joints=None, left_hand_pose=None, right_hand_pose=None):
+    def init(self, directory, id, np_random, gender='female', height=None, body_shape=None, joint_angles=[], position=[0, 0, 0], orientation=[0, 0, 0], skin_color='random', specular_color=[0.1, 0.1, 0.1], body_pose=None, out_mesh=None, vertices=None, joints=None, left_hand_pose=None, right_hand_pose=None, collision_enabled=True):
         if out_mesh is None:
             # Create mesh
             out_mesh, vertices, joints = self.create_smplx_body(directory, id, np_random, gender, height, body_shape, joint_angles, position, orientation, body_pose, left_hand_pose, right_hand_pose)
@@ -158,7 +158,6 @@ class HumanMesh(Agent):
         if self.skin_color == 'random':
             hsv = list(colorsys.rgb_to_hsv(0.8, 0.6, 0.4))
             hsv[-1] = np_random.uniform(0.4, 0.8)
-            hsv[-1] = 0.6
             self.skin_color = list(colorsys.hsv_to_rgb(*hsv)) + [1.0]
 
         if self.right_arm_vertex_indices is None:
@@ -169,9 +168,13 @@ class HumanMesh(Agent):
             with tempfile.NamedTemporaryFile(suffix='.obj') as f_vhacd:
                 with tempfile.NamedTemporaryFile(suffix='.txt') as f_log:
                     out_mesh.export(f.name)
-                    p.vhacd(f.name, f_vhacd.name, f_log.name)
                     human_visual = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=f.name, meshScale=1.0, rgbaColor=self.skin_color, specularColor=specular_color, physicsClientId=id)
-                    human_collision = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=f_vhacd.name, meshScale=1.0, physicsClientId=id)
+                    if collision_enabled:
+                        p.vhacd(f.name, f_vhacd.name, f_log.name)
+                        human_collision = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=f_vhacd.name, meshScale=1.0, physicsClientId=id)
+                    else:
+                        human_collision = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=f.name, meshScale=1.0, physicsClientId=id)
+                        # human_collision = None
                     self.body = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=human_collision, baseVisualShapeIndex=human_visual, basePosition=position, baseOrientation=[0, 0, 0, 1], useMaximalCoordinates=False, physicsClientId=id)
                     # self.body = p.createMultiBody(baseMass=0, baseVisualShapeIndex=human_visual, basePosition=position, baseOrientation=[0, 0, 0, 1], useMaximalCoordinates=False, physicsClientId=id)
 
