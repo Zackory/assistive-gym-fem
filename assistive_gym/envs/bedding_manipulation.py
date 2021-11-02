@@ -13,8 +13,12 @@ from gym.utils import seeding
 
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
+        self.single_model_all_targets = True
         if robot is None:
-            super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=12, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+            if not self.single_model_all_targets:
+                super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=28, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+            else:
+                super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=28+16, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
 
         parser = argparse.ArgumentParser(description='Bedding Manipulation Enviornment')
@@ -40,7 +44,7 @@ class BeddingManipulationEnv(AssistiveEnv):
                             help='Whether to evaluate a trained policy over n_episodes')
         args, unknown = parser.parse_known_args()
 
-        if args.target_limb_code == 'random':
+        if args.target_limb_code == 'random' or self.single_model_all_targets:
             self.fixed_target_limb = False
         else:
             self.fixed_target_limb = True
@@ -331,9 +335,16 @@ class BeddingManipulationEnv(AssistiveEnv):
             pos, orient = self.human.get_pos_orient(limb)
             # print("pose", limb, pos, orient)
             pos2D = pos[0:2]
-            yaw = p.getEulerFromQuaternion(orient)[-1]
-            pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
+            # yaw = p.getEulerFromQuaternion(orient)[-1]
+            # pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
+            pose.append(pos2D)
         pose = np.concatenate(pose, axis=0)
+
+        if self.single_model_all_targets:
+            one_hot_target_limb = [0]*len(self.human.all_possible_target_limbs)
+            one_hot_target_limb[self.target_limb_code] = 1
+            pose = np.concatenate([one_hot_target_limb, pose], axis=0)
+
         # * collect more infomation for cmaes data collect, enables you to train model with different observations if you want to
         if self.cmaes_dc:
             output = [None]*12
@@ -350,7 +361,7 @@ class BeddingManipulationEnv(AssistiveEnv):
     
     def set_target_limb_code(self, target_limb_code=None):
         if target_limb_code == None:
-            self.target_limb_code = self.np_random.randint(0,12)
+            self.target_limb_code = self.np_random.randint(0,len(self.human.all_possible_target_limbs))
         else:
             self.target_limb_code = target_limb_code
 
@@ -419,7 +430,17 @@ class BeddingManipulationEnv(AssistiveEnv):
 
         # * take image after human settles
         if self.take_images: self.capture_images()
-        
+
+        ## print spheres at obs joints, arbitrarily assigned z position
+        # obs = self._get_obs()
+        # print(obs)
+        # print(len(obs))
+        # for i in range(0,len(obs),2):
+        #     po = list(obs[i:i+2])
+        #     po.append(0.9)
+        #     print(po)
+        #     self.sphere_ee = self.create_sphere(radius=0.025, mass=0.0, pos = po, visual=True, collision=True, rgba=[1, 0, 0, 1])
+
         if self.use_mesh:
             # * we do not use a mesh in this work
             # Replace the capsulized human with a human mesh
