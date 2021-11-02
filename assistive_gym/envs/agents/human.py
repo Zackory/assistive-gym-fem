@@ -10,7 +10,8 @@ right_leg_joints = [33, 34, 35, 36, 37, 38, 39]
 left_leg_joints = [40, 41, 42, 43, 44, 45, 46]
 head_joints = [29, 30, 31, 32]
 test_joints = [46, 39]
-obs_limbs = [36, 43, 16, 26]
+old_obs_limbs = [36, 43, 16, 26]
+obs_limbs = [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42, 8, 32]
 
 #! added for bedding manipulation
 #? can the chest be removed? alignment is less reliable with large pose variation and there is a lot of overlap with points on upperchest and waist anyway
