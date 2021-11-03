@@ -13,7 +13,7 @@ from gym.utils import seeding
 
 class BeddingManipulationEnv(AssistiveEnv):
     def __init__(self, robot, human, use_mesh=False):
-        self.single_model_all_targets = True
+        self.single_model_all_targets = False
         if robot is None:
             if not self.single_model_all_targets:
                 super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=28, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
