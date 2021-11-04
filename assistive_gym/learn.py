@@ -110,7 +110,7 @@ def make_env(env_name, coop=False, seed=1001):
 def train(env_name, algo, timesteps_total=1000000, save_dir='./trained_models/', load_policy_path='', coop=False, seed=0, extra_configs={}, target_limb_code=None):
     ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
     env = make_env(env_name, coop)
-    env.set_target_limb_code(target_limb_code)
+    #env.set_target_limb_code(target_limb_code)
     agent, checkpoint_path = load_policy(env, algo, env_name, load_policy_path, coop, seed, extra_configs)
     env.disconnect()
 
