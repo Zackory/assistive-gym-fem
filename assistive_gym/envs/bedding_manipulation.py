@@ -20,55 +20,65 @@ class BeddingManipulationEnv(AssistiveEnv):
             else:
                 super(BeddingManipulationEnv, self).__init__(robot=None, human=human, task='bedding_manipulation', obs_robot_len=28+16, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
             self.use_mesh = use_mesh
-
-        parser = argparse.ArgumentParser(description='Bedding Manipulation Enviornment')
-        parser.add_argument('--target-limb-code', required=True,
-                            help='Code for target limb to uncover, see human.py for a list of available target codes')
-        parser.add_argument('--render-body-points', action='store_true', default=False,
-                            help='Render points on the body. Points still exist even if not rendered')
-        parser.add_argument('--verbose', action='store_true', default=False,
-                            help='More verbose prints')
-        parser.add_argument('--take-images', action='store_true', default=False,
-                            help='Enable taking images during rollout')
-        parser.add_argument('--save-image-dir', default='./saved_images',
-                            help='Directory to save images to')
-        parser.add_argument('--fixed-human-pose', action='store_true', default=False,
-                            help='Fixed human pose between rollouts')
-        parser.add_argument('--vary-blanket-pose', action='store_true', default=False,
-                            help='Introduce variation to the initial configuration of the blanket.')
-        parser.add_argument('--vary-body-shape', action='store_true', default=False,
-                            help='Introduce variation to human body shape.')
-        parser.add_argument('--cmaes-data-collect', action='store_true', default=False,
-                            help='Whether to evaluate a trained policy over n_episodes')
-        parser.add_argument('--evaluate', action='store_true', default=False,
-                            help='Whether to evaluate a trained policy over n_episodes')
-        args, unknown = parser.parse_known_args()
-
-        if args.target_limb_code == 'random' or self.single_model_all_targets:
-            self.fixed_target_limb = False
-        else:
-            self.fixed_target_limb = True
-            self.target_limb_code = int(args.target_limb_code)
-
-        self.body_shape = None if args.vary_body_shape else np.zeros((1, 10))
-
-        if args.take_images:
-            self.take_images = True
-            self.save_image_dir = args.save_image_dir
-
-        # * all the parameters below are False unless spepcified otherwise by args
-        self.render_body_points = args.render_body_points
-        self.fixed_pose = args.fixed_human_pose
-        self.verbose = (args.verbose and not args.evaluate)
-        self.blanket_pose_var = args.vary_blanket_pose
-        self.take_images = args.take_images
-        self.cmaes_dc = args.cmaes_data_collect
-
-        # * these parameters don't have cmd args to modify them
+        
+        # TODO: CLEAN UP THESE INITIAL STATES (MAKE SURE THEY ALIGN WITH OLD CMD ARGS) AND ALL SETTERS
+        # TODO: REVISIT TO ADD ARGS THAT WERE PREVIOUSLY IN THE BM FILE TO ENV VIEWER, CONSIDER HOW THEY SHOULD BE ACCOUNTED FOR
         self.seed_val = 1001
         self.save_pstate = False
         self.pstate_file = None
+        self.fixed_target_limb = True # TODO: REVIST IF THIS PARAM IS NECESSARY
+        self.target_limb_code = None
+        self.cmaes_dc = False
+        self.render_body_points = False
+        self.fixed_pose = False
+        self.body_shape = np.zeros((1, 10))
+        self.verbose = False
+        self.blanket_pose_var = False
+        self.take_images = False
+        self.save_image_dir = './saved_images'
 
+    def set_seed_val(self, seed = 1001):
+        if seed != self.seed_val:
+            self.seed_val = seed
+
+    # TODO: REVISIT, THERE MAY BE REDUNDANCY
+    def set_fixed_target_limb(self, fixed_target_limb=False):
+        self.fixed_target_limb = fixed_target_limb
+
+    # TODO: REVISIT, THERE MAY BE REDUNDANCY
+    def set_target_limb_code(self, target_limb_code=None):
+        if target_limb_code == None:
+            # TODO: Raise exception here
+            print("Target code not specified!")
+        elif target_limb_code == 'random' or self.single_model_all_targets:
+            self.fixed_target_limb = False
+            self.target_limb_code = self.np_random.randint(0,len(self.human.all_possible_target_limbs))
+        else:
+            self.fixed_target_limb = True
+            self.target_limb_code = int(target_limb_code)
+
+    def set_fixed_human_pose(self, fixed_human_pose=False):
+        self.fixed_pose = fixed_human_pose
+
+    def set_body_shape_var(self, vary_body_shape=False):
+        self.body_shape = None if vary_body_shape else np.zeros((1, 10))
+
+    def set_blanket_pose_var(self, vary_blanket_pose=False):
+        self.blanket_pose_var = vary_blanket_pose
+
+    def set_pstate_file(self, filename):
+        if self.pstate_file != filename:
+            self.pstate_file = filename
+            self.save_pstate = True
+
+    def set_photography(self, take_images=False, image_dir=None):
+        self.take_images = take_images
+        if self.take_images:
+            self.save_image_dir = image_dir
+
+    # TODO: Does this setter need to be defined??
+    def set_cmaes_dc(self, cmaes_dc=False):
+        pass
 
     def step(self, action):
         obs = self._get_obs()
@@ -354,21 +364,6 @@ class BeddingManipulationEnv(AssistiveEnv):
             return output
 
         return pose
-
-    def set_seed_val(self, seed = 1001):
-        if seed != self.seed_val:
-            self.seed_val = seed
-    
-    def set_target_limb_code(self, target_limb_code=None):
-        if target_limb_code == None:
-            self.target_limb_code = self.np_random.randint(0,len(self.human.all_possible_target_limbs))
-        else:
-            self.target_limb_code = target_limb_code
-
-    def set_pstate_file(self, filename):
-        if self.pstate_file != filename:
-            self.pstate_file = filename
-            self.save_pstate = True
 
     def reset(self):
         super(BeddingManipulationEnv, self).reset()

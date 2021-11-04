@@ -12,9 +12,12 @@ import keras
 
 def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
     num_processes = multiprocessing.cpu_count()
+    num_envs_per_worker = 4
     if algo == 'ppo':
         config = ppo.DEFAULT_CONFIG.copy()
-        config['train_batch_size'] = num_processes*4
+        config['train_batch_size'] = num_processes*num_envs_per_worker
+        config['num_envs_per_worker'] = num_envs_per_worker
+        config['rollout_fragment_length'] = 1
         config['num_sgd_iter'] = 50
         config['sgd_minibatch_size'] = 2
         config['lambda'] = 0.95
@@ -104,9 +107,10 @@ def make_env(env_name, coop=False, seed=1001):
     env.seed(seed)
     return env
 
-def train(env_name, algo, timesteps_total=1000000, save_dir='./trained_models/', load_policy_path='', coop=False, seed=0, extra_configs={}):
+def train(env_name, algo, timesteps_total=1000000, save_dir='./trained_models/', load_policy_path='', coop=False, seed=0, extra_configs={}, target_limb_code=None):
     ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
     env = make_env(env_name, coop)
+    env.set_target_limb_code(target_limb_code)
     agent, checkpoint_path = load_policy(env, algo, env_name, load_policy_path, coop, seed, extra_configs)
     env.disconnect()
 
@@ -244,7 +248,7 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
     sys.stdout.flush()
     f.close()
 
-
+# TODO: REVISIT TO ADD ARGS THAT WERE PREVIOUSLY IN THE BM FILE, CONSIDER HOW THEY SHOULD BE ACCOUNTED FOR IN TRAIN, EVAL, RENDER, ETC.
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='RL for Assistive Gym')
     parser.add_argument('--env', default='ScratchItchJaco-v0',
@@ -269,6 +273,10 @@ if __name__ == '__main__':
                         help='Number of rendering episodes (default: 1)')
     parser.add_argument('--eval-episodes', type=int, default=100,
                         help='Number of evaluation episodes (default: 100)')
+
+    parser.add_argument('--target-limb-code', required=True,
+                            help='Code for target limb to uncover, see human.py for a list of available target codes')
+
     parser.add_argument('--colab', action='store_true', default=False,
                         help='Whether rendering should generate an animated png rather than open a window (e.g. when using Google Colab)')
     parser.add_argument('--verbose', action='store_true', default=False,
@@ -279,7 +287,7 @@ if __name__ == '__main__':
     checkpoint_path = None
 
     if args.train:
-        checkpoint_path = train(args.env, args.algo, timesteps_total=args.train_timesteps, save_dir=args.save_dir, load_policy_path=args.load_policy_path, coop=coop, seed=args.seed)
+        checkpoint_path = train(args.env, args.algo, timesteps_total=args.train_timesteps, save_dir=args.save_dir, load_policy_path=args.load_policy_path, coop=coop, seed=args.seed, target_limb_code=args.target_limb_code)
     if args.render:
         render_policy(None, args.env, args.algo, checkpoint_path if checkpoint_path is not None else args.load_policy_path, coop=coop, colab=args.colab, seed=args.seed, n_episodes=args.render_episodes)
     if args.evaluate:
