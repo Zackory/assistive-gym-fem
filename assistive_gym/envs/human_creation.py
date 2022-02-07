@@ -82,7 +82,7 @@ class HumanCreation:
             return collision_shape, visual_shape
 
         smplx_model_folder = os.path.join(self.directory, 'smpl_models', 'smplx')
-        if os.path.isdir(smplx_model_folder) and False:
+        if os.path.isdir(smplx_model_folder):
             # NOTE: creating the human mesh model
             out_mesh, vertices, joints = self.human_mesh.create_smplx_body(self.directory, self.id, self.np_random, gender=gender, body_shape=body_shape, position=[0, 0, 0], orientation=[0, 0, 0])
             # self.human_mesh.init(self.directory, self.id, self.np_random, out_mesh=out_mesh, vertices=vertices, joints=joints)
