@@ -7,11 +7,9 @@ import pybullet as p
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
-from torch import initial_seed, set_default_tensor_type
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
-from gym.utils import seeding
 
 # since there is no gnn_testing_envs file
 from .agents.human import Human
@@ -25,17 +23,41 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         self.use_mesh = False
         
         self.take_pictures = False
-        self.rendering = True
+        self.rendering = False
         self.fixed_target = True
         self.target_limb_code = []
         self.fixed_pose = False
-        self.seed_val = 1001
         self.save_pstate = False
         self.pstate_file = None
-        self.all_pose_info_dc = False
+        self.collect_data = False
         self.blanket_pose_var = False
+        self.naive = False
+
         # self.single_model = True
 
+    def get_action(self, obs):
+        human_pose = np.reshape(obs, (-1,2))
+        feet_midpoint = (human_pose[3] + human_pose[9])/2
+        knee_midpoint = (human_pose[4] + human_pose[10])/2
+        hip_midpoint = (human_pose[5] + human_pose[11])/2
+        btw_upperchest_head_midpoint = (human_pose[12] + human_pose[13])/2
+
+        coeff = np.polyfit([feet_midpoint[1], knee_midpoint[1]], [feet_midpoint[0], knee_midpoint[0]], 1)
+        line = np.poly1d(coeff)
+        # release_y = list(btw_upperchest_head_midpoint)[1]
+        release_y = list(human_pose[13])[1]
+        release_x = line(release_y)
+
+        # self.create_sphere(radius=0.01, mass=0.0, pos = list(feet_midpoint)+[0.9], visual=True, collision=True, rgba=[0, 1, 0, 1])
+        # self.create_sphere(radius=0.01, mass=0.0, pos = list(knee_midpoint)+[0.9], visual=True, collision=True, rgba=[1, 1, 0, 1])
+        # self.create_sphere(radius=0.01, mass=0.0, pos = list(hip_midpoint)+[0.9], visual=True, collision=True, rgba=[0, 0, 0, 1])
+        # self.create_sphere(radius=0.01, mass=0.0, pos = list(btw_upperchest_hip_midpoint)+[0.9], visual=True, collision=True, rgba=[0, 0, 0, 1])
+        # self.create_sphere(radius=0.01, mass=0.0, pos = [release_x, release_y, 0.9], visual=True, collision=True, rgba=[1, 0, 0, 1])
+
+        action = np.array(list(feet_midpoint) + [release_x] + [release_y])
+        return action
+
+        
     def step(self, action):
         obs = self._get_obs()
         # return obs, 0, True, {}
@@ -47,6 +69,10 @@ class GNNDatasetCollectEnv(AssistiveEnv):
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
         scale = [0.44, 1.05]
+
+        if self.naive:
+            action = self.get_action(obs)
+            scale = [1, 1]
         grasp_loc = action[0:2]*scale
         release_loc = action[2:4]*scale
 
@@ -64,8 +90,9 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         if not np.any(np.array(dist) < 0.028):
             clipped = True
             # print("clip")
-            # return obs, 0, True, {} # for data collect
-            # return obs, 0, False, {} # for data collect
+            # return obs, 0, True, {}
+            if self.collect_data:
+                return obs, 0, False, {} # for data collect
 
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
         # for a in anchor_idx:
@@ -118,12 +145,19 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         # * get points on the blanket, final state of the cloth
         data_f = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
 
-        reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
-        cloth_initial_subsample, cloth_final_subsample = self.sub_sample_point_clouds(data_i[1], data_f[1])
-        reward = self.get_reward(obs, cloth_initial_subsample, cloth_final_subsample) + reward_distance_btw_grasp_release
+        reward = 0
+        cloth_initial_subsample = cloth_final_subsample = -1 # none for data collection
+
+        if not self.collect_data:
+            reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
+            cloth_initial_subsample, cloth_final_subsample = self.sub_sample_point_clouds(data_i[1], data_f[1])
+            reward = self.get_reward(obs, cloth_initial_subsample, cloth_final_subsample) + reward_distance_btw_grasp_release
         info = {
             "cloth_initial": data_i,
             "cloth_final": data_f,
+            "cloth_initial_subsample": cloth_initial_subsample,
+            "cloth_final_subsample": cloth_final_subsample,
+            "covered_status_sim": self.covered_status
             }
         self.iteration += 1
         done = self.iteration >= 1
@@ -131,10 +165,6 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         # return 0, 0, 1, {}
         return obs, reward, done, info
         
-    def set_seed_val(self, seed = 1001):
-        if seed != self.seed_val:
-            self.seed_val = seed
-    
     def sub_sample_point_clouds(self, cloth_initial_3D_pos, cloth_final_3D_pos):
         cloth_initial = np.array(cloth_initial_3D_pos)
         cloth_final = np.array(cloth_final_3D_pos)
@@ -176,6 +206,9 @@ class GNNDatasetCollectEnv(AssistiveEnv):
                 initially_covered_status.append(False)
         
         return initially_covered_status
+    
+    def get_cloth_state(self):
+        return p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)[1]
 
     def get_reward(self, human_pose, cloth_initial_3D, cloth_final_3D):
         human_pose = np.reshape(human_pose, (-1,2))
@@ -229,6 +262,7 @@ class GNNDatasetCollectEnv(AssistiveEnv):
             print('covered', covered_status)
             print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
             print(reward)
+        self.covered_status = covered_status
 
         return reward
     
@@ -246,7 +280,7 @@ class GNNDatasetCollectEnv(AssistiveEnv):
             pose.append(pos2D)
         pose = np.concatenate(pose, axis=0)
 
-        if self.all_pose_info_dc:
+        if self.collect_data:
 
             output = [None]*28
             all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
@@ -321,7 +355,8 @@ class GNNDatasetCollectEnv(AssistiveEnv):
 
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])
- 
+    
+
         # * select a target limb to uncover (may be fixed or random) 
         # if not self.fixed_target:
         #     self.set_target_limb_code()
@@ -331,11 +366,12 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         self.target_limb = self.target_limb_code = []
 
         # self.generate_points_along_body()
+        # self.get_point_cloud()
        
         # * spawn blanket
         self.blanket = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'blanket_2089v.obj'), scale=0.75, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.0005, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.006, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
         # * change alpha value so that it is a little more translucent, easier to see the relationship the human
-        p.changeVisualShape(self.blanket, -1, rgbaColor=[0, 0, 1, 0.75], flags=0, physicsClientId=self.id)
+        p.changeVisualShape(self.blanket, -1, rgbaColor=[0, 0, 1, 1], flags=0, physicsClientId=self.id)
         p.changeVisualShape(self.blanket, -1, flags=p.VISUAL_SHAPE_DOUBLE_SIDED, physicsClientId=self.id)
         p.setPhysicsEngineParameter(numSubSteps=4, numSolverIterations = 4, physicsClientId=self.id)
         if self.blanket_pose_var:
@@ -350,8 +386,13 @@ class GNNDatasetCollectEnv(AssistiveEnv):
 
         # * Drop the blanket on the person, allow to settle
         p.setGravity(0, 0, -9.81, physicsClientId=self.id)
-        for _ in range(50):
+        for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
+
+
+        # self.get_point_cloud()
+
+        # time.sleep(100)
 
 
         # data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
@@ -396,9 +437,17 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         if self.take_pictures == True:
             self.setup_camera_rpy(camera_target=[0, 0, 0.305+2.101], distance=0.01, rpy=[0, -90, 180], fov=60, camera_width=468//2, camera_height=398)
             img, depth = self.get_camera_image_depth()
+            # print(depth)
+            depth = (depth - np.amin(depth)) / (np.amax(depth) - np.amin(depth))
+            depth = (depth * 255).astype(np.uint8)
+            # print(depth)
+            # print(depth.shape)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            depth_colormap = cv2.applyColorMap(depth, cv2.COLORMAP_VIRIDIS)
             filename = time.strftime("%Y%m%d-%H%M%S") + '.png'
-            cv2.imwrite(os.path.join('/home/mycroft/git/vBMdev/pose_variation_images/lower_var2', filename), img)
+            filename = "test_depth.png"
+            # cv2.imwrite(os.path.join('/home/mycroft/git/vBMdev/pose_variation_images/lower_var2', filename), img)
+            cv2.imwrite(filename, depth_colormap)
 
         return self._get_obs()
     
