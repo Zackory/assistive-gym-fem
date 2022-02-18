@@ -10,11 +10,10 @@ def sample_action(env):
 
 def gnn_data_collect(env_name, i):
     coop = 'Human' in env_name
-    env = make_env(env_name, coop=True) if coop else gym.make(env_name)
+    env = make_env(env_name, coop=coop, seed=seeding.create_seed())
 
     done = False
     #env.render()
-    env.set_seed_val(seeding.create_seed())
     observation = env.reset()
     pid = os.getpid()
     while not done:
@@ -22,7 +21,7 @@ def gnn_data_collect(env_name, i):
         # action = np.array([0,0,0,0])
         observation, reward, done, info = env.step(action)
     
-    filename = f"c{i}_{env.seed_val}_pid{pid}"
+    filename = f"c{i}_{env.seed}_pid{pid}"
     with open(os.path.join(pkl_loc, filename +".pkl"),"wb") as f:
         pickle.dump({
             "observation":observation, 
