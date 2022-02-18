@@ -15,8 +15,9 @@ def sample_action(env, coop):
 def viewer(env_name):
     coop = 'Human' in env_name
     env = make_env(env_name, coop=True) if coop else gym.make(env_name)
-
-    while True:
+    all_reward = []
+    # while True:
+    for i in range(100):
         done = False
         env.render()
         observation = env.reset()
@@ -29,13 +30,20 @@ def viewer(env_name):
         elif 'RemoveContactSphere-v1' in env_name:
             action = np.array([0.3, 0.45])
         else:
-            print('Observation size:', np.shape(observation), 'Action size:', np.shape(action))
+            pass
+            # print('Observation size:', np.shape(observation), 'Action size:', np.shape(action))
 
         while not done:
             # observation, reward, done, info = env.step(sample_action(env, coop))
             observation, reward, done, info = env.step(action)
             if coop:
                 done = done['__all__']
+        print(f"Trial {i}: Reward = {reward:.2f}")
+        all_reward.append(reward)
+
+    print("Mean Reward:", np.mean(all_reward))
+    print("Reward Std:", np.std(all_reward))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Assistive Gym Environment Viewer')
