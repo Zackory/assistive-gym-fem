@@ -61,15 +61,20 @@ if __name__ == "__main__":
 
     # trials = 4
     # num_processes = 4
-
     counter = 0
-    result_objs = []
-    with multiprocessing.Pool(processes=num_processes) as pool:
-        for i in range(trials):
-            result = pool.apply_async(gnn_data_collect, args = (args.env, i), callback=counter_callback)
-            result_objs.append(result)
 
-        results = [result.get() for result in result_objs]
+
+    # structured this way to prevent unusual errors in pybullet where cloth anchors do not get cleared correctly between trials
+    result_objs = []
+    for j in range(math.ceil(trials/num_processes)):
+        with multiprocessing.Pool(processes=num_processes) as pool:
+            for i in range(num_processes):
+                result = pool.apply_async(gnn_data_collect, args = (args.env, i), callback=counter_callback)
+                result_objs.append(result)
+
+            results = [result.get() for result in result_objs]
+            # print(len(results))
+            # print(results)
     
     # print(results)
 
