@@ -494,6 +494,9 @@ class AssistiveEnv(gym.Env):
 
         stepX = 2
         stepY = 2
+
+        point_cloud = []
+        point_cloud_filtered = []
         for w in range(0, imgW, stepX):
             for h in range(0, imgH, stepY):
                 count += 1
@@ -510,8 +513,11 @@ class AssistiveEnv(gym.Env):
                 depth = far * near / (far - (far - near) * depthImg)
                 depth /= math.cos(alpha)
                 newTo = (depth / l) * vec + rf
+                point_cloud.append(newTo)
                 # p.addUserDebugLine(rayFrom, newTo, [1, 0, 0])
-                if not (newTo[2] < 0.585):
+                # z pos must be greater than height of the bed
+                if (newTo[2] > 0.585) and (abs(newTo[1])<1.05):
+                    point_cloud_filtered.append(newTo)
                     mb = p.createMultiBody(baseMass=0,
                                         baseCollisionShapeIndex=collisionShapeId,
                                         baseVisualShapeIndex=visualShapeId,
@@ -520,12 +526,16 @@ class AssistiveEnv(gym.Env):
                     color = rgbBuffer[h, w]
                     color = [color[0] / 255., color[1] / 255., color[2] / 255., 1]
                     p.changeVisualShape(mb, -1, rgbaColor=color)
+        
+
         p.addUserDebugLine(corners3D[0], corners3D[1], [1, 0, 0])
         p.addUserDebugLine(corners3D[1], corners3D[2], [1, 0, 0])
         p.addUserDebugLine(corners3D[2], corners3D[3], [1, 0, 0])
         p.addUserDebugLine(corners3D[3], corners3D[0], [1, 0, 0])
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
         print("ready\n")
+        print(len(point_cloud), len(point_cloud_filtered))
+        return point_cloud_filtered
 
     def create_box(self, half_extents=[1, 1, 1], mass=0.0, pos=[0, 0, 0], orientation=[0, 0, 0, 1], visual=True, collision=True, rgba=[0, 1, 1, 1], maximal_coordinates=False, return_collision_visual=False):
         box_collision = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=half_extents, physicsClientId=self.id) if collision else -1
