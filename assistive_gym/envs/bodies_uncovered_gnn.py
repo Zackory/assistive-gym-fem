@@ -7,6 +7,7 @@ import pybullet as p
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
+from .bu_gnn_util import sub_sample_point_clouds, get_body_points_reward
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
@@ -17,26 +18,27 @@ human_controllable_joint_indices = []
 
 #! max_episode_steps=200 CHECK THAT THIS IS STILL OKAY MOVING FORWARD
 
-class GNNDatasetCollectEnv(AssistiveEnv):
+class BodiesUncoveredGNNEnv(AssistiveEnv):
     def __init__(self):
-        super(GNNDatasetCollectEnv, self).__init__(robot=None, human=Human(human_controllable_joint_indices, controllable=True), task='bedding_manipulation', obs_robot_len=28, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+        super(BodiesUncoveredGNNEnv, self).__init__(robot=None, human=Human(human_controllable_joint_indices, controllable=True), task='bedding_manipulation', obs_robot_len=28, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
         self.use_mesh = False
         
         self.take_pictures = False
         self.rendering = False
         self.fixed_target = True
         self.target_limb_code = []
+        self.target_limb_code = 14
         self.fixed_pose = False
         self.save_pstate = False
         self.pstate_file = None
-        self.collect_data = False
+        self.collect_data = True
         self.blanket_pose_var = False
         self.naive = False
 
         # self.single_model = True
 
     def get_action(self, obs):
-        human_pose = np.reshape(obs, (-1,2))
+        human_pose = self.human_pose
         feet_midpoint = (human_pose[3] + human_pose[9])/2
         knee_midpoint = (human_pose[4] + human_pose[10])/2
         hip_midpoint = (human_pose[5] + human_pose[11])/2
@@ -60,9 +62,10 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         
     def step(self, action):
         obs = self._get_obs()
+        self.human_pose = np.reshape(obs, (-1,2))
         # return obs, 0, True, {}
-
         # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
+        
         if self.rendering:
             print(obs)
             print(action)
@@ -150,122 +153,27 @@ class GNNDatasetCollectEnv(AssistiveEnv):
 
         if not self.collect_data:
             reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
-            cloth_initial_subsample, cloth_final_subsample = self.sub_sample_point_clouds(data_i[1], data_f[1])
-            reward = self.get_reward(obs, cloth_initial_subsample, cloth_final_subsample) + reward_distance_btw_grasp_release
+            cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(data_i[1], data_f[1])
+            cloth_initial_2D = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
+            cloth_final_2D = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
+            reward = get_body_points_reward(obs, cloth_initial_2D, cloth_final_2D) + reward_distance_btw_grasp_release
+
         info = {
             "cloth_initial": data_i,
             "cloth_final": data_f,
-            "cloth_initial_subsample": cloth_initial_subsample,
-            "cloth_final_subsample": cloth_final_subsample,
-            "covered_status_sim": self.covered_status
+            "RBG_human": self.human_no_occlusion_RGB,
+            "depth_human": self.human_no_occlusion_depth
+            # "cloth_initial_subsample": cloth_initial_subsample,
+            # "cloth_final_subsample": cloth_final_subsample,
+            # "covered_status_sim": self.covered_status
             }
         self.iteration += 1
         done = self.iteration >= 1
 
         # return 0, 0, 1, {}
         return obs, reward, done, info
-        
-    def sub_sample_point_clouds(self, cloth_initial_3D_pos, cloth_final_3D_pos):
-        cloth_initial = np.array(cloth_initial_3D_pos)
-        cloth_final = np.array(cloth_final_3D_pos)
-        voxel_size = 0.05
-        nb_vox=np.ceil((np.max(cloth_initial, axis=0) - np.min(cloth_initial, axis=0))/voxel_size)
-        non_empty_voxel_keys, inverse, nb_pts_per_voxel = np.unique(((cloth_initial - np.min(cloth_initial, axis=0)) // voxel_size).astype(int), axis=0, return_inverse=True, return_counts=True)
-        idx_pts_vox_sorted=np.argsort(inverse)
-
-        voxel_grid={}
-        voxel_grid_cloth_inds={}
-        cloth_initial_subsample=[]
-        cloth_final_subsample = []
-        last_seen=0
-        for idx,vox in enumerate(non_empty_voxel_keys):
-            voxel_grid[tuple(vox)]= cloth_initial[idx_pts_vox_sorted[last_seen:last_seen+nb_pts_per_voxel[idx]]]
-            voxel_grid_cloth_inds[tuple(vox)] = idx_pts_vox_sorted[last_seen:last_seen+nb_pts_per_voxel[idx]]
-            
-            closest_point_to_barycenter = np.linalg.norm(voxel_grid[tuple(vox)] - np.mean(voxel_grid[tuple(vox)],axis=0),axis=1).argmin()
-            cloth_initial_subsample.append(voxel_grid[tuple(vox)][closest_point_to_barycenter])
-            cloth_final_subsample.append(cloth_final[voxel_grid_cloth_inds[tuple(vox)][closest_point_to_barycenter]])
-
-            last_seen+=nb_pts_per_voxel[idx]
-        # print(len(cloth_initial_subsample), len(cloth_final_subsample))
-        
-        return cloth_initial_subsample, cloth_final_subsample
     
-    def get_initially_uncovered_status(self, human_pose, cloth_initial_3D):
-        initially_covered_status = []
 
-        for joint_pos in human_pose.tolist():
-            covered = False
-            for point in cloth_initial_3D:
-                if np.linalg.norm(point - joint_pos) <= 0.05:
-                    covered = True
-                    break
-            if covered:
-                initially_covered_status.append(True)
-            else:
-                initially_covered_status.append(False)
-        
-        return initially_covered_status
-    
-    def get_cloth_state(self):
-        return p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)[1]
-
-    def get_reward(self, human_pose, cloth_initial_3D, cloth_final_3D):
-        human_pose = np.reshape(human_pose, (-1,2))
-        cloth_initial_2D_pos = np.delete(np.array(cloth_initial_3D), 2, axis = 1)
-        cloth_final_2D_pos = np.delete(np.array(cloth_final_3D), 2, axis = 1)
-
-        all_possible_target_limbs = [
-                [0], [0,1], [0,1,2], 
-                [3], [3,4], [3,4,5],
-                [6], [6,7], [6,7,8],
-                [9], [9,10], [9,10,11],
-                [6,7,8,9,10,11], [3,4,5,9,10,11]]
-        target_limb_code = 13
-        target = all_possible_target_limbs[target_limb_code]
-        # print(target)
-
-        covered_status = []
-
-        for joint_pos in human_pose.tolist():
-            covered = False
-            for point in cloth_final_2D_pos:
-                if np.linalg.norm(point - joint_pos) <= 0.05:
-                    covered = True
-                    break
-            if covered:
-                covered_status.append(True)
-            else:
-                covered_status.append(False)
-
-        initially_covered_status = self.get_initially_uncovered_status(human_pose, cloth_initial_2D_pos)
-        # print(initially_covered_status)
-        # print(covered_status)
-        head_ind = len(covered_status)-1
-        target_uncovered_reward = 0
-        nontarget_uncovered_penalty = 0
-        head_covered_penalty = 0
-        for ind, cov in enumerate(covered_status):
-            if ind in target and cov is False:
-                target_uncovered_reward += 1
-            elif ind == head_ind and cov is True:
-                head_covered_penalty = 1
-            elif ind not in target and ind != head_ind and cov is False and initially_covered_status[ind] is True:
-                nontarget_uncovered_penalty += 1
-        target_uncovered_reward = 100*(target_uncovered_reward/len(target))
-        nontarget_uncovered_penalty = -100*(nontarget_uncovered_penalty/len(target))
-        head_covered_penalty = -200*head_covered_penalty
-        reward = target_uncovered_reward + nontarget_uncovered_penalty + head_covered_penalty
-        
-        if self.rendering:
-            print('initial covered', initially_covered_status)
-            print('covered', covered_status)
-            print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
-            print(reward)
-        self.covered_status = covered_status
-
-        return reward
-    
     def _get_obs(self, agent=None):
 
         # data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)[1]
@@ -285,8 +193,7 @@ class GNNDatasetCollectEnv(AssistiveEnv):
             output = [None]*28
             all_joint_angles = self.human.get_joint_angles(self.human.all_joint_indices)
             all_pos_orient = [self.human.get_pos_orient(limb) for limb in self.human.all_body_parts]
-            all_body_points = self.points_pos_nontarget_limb_world
-            output[0], output[1], output[2], output[3] = pose, all_joint_angles, all_pos_orient, all_body_points
+            output[0], output[1], output[2] = pose, all_joint_angles, all_pos_orient
             return output
 
             
@@ -298,7 +205,7 @@ class GNNDatasetCollectEnv(AssistiveEnv):
 
     def reset(self):
 
-        super(GNNDatasetCollectEnv, self).reset()
+        super(BodiesUncoveredGNNEnv, self).reset()
         self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
 
         # * enable rendering
@@ -434,20 +341,19 @@ class GNNDatasetCollectEnv(AssistiveEnv):
         
         # * Setup camera for taking images
         # *     Currently saves color images only to specified directory
-        if self.take_pictures == True:
+        if self.take_pictures or self.collect_data:
             self.setup_camera_rpy(camera_target=[0, 0, 0.305+2.101], distance=0.01, rpy=[0, -90, 180], fov=60, camera_width=468//2, camera_height=398)
             img, depth = self.get_camera_image_depth()
-            # print(depth)
+            self.human_no_occlusion_RGB = img
+            self.human_no_occlusion_depth = depth
             depth = (depth - np.amin(depth)) / (np.amax(depth) - np.amin(depth))
             depth = (depth * 255).astype(np.uint8)
-            # print(depth)
-            # print(depth.shape)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             depth_colormap = cv2.applyColorMap(depth, cv2.COLORMAP_VIRIDIS)
-            filename = time.strftime("%Y%m%d-%H%M%S") + '.png'
-            filename = "test_depth.png"
+            # filename = time.strftime("%Y%m%d-%H%M%S") + '.png'
+            # filename = "test_depth.png"
             # cv2.imwrite(os.path.join('/home/mycroft/git/vBMdev/pose_variation_images/lower_var2', filename), img)
-            cv2.imwrite(filename, depth_colormap)
+            # cv2.imwrite(filename, depth_colormap)
 
         return self._get_obs()
     
