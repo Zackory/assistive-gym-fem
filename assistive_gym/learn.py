@@ -186,10 +186,6 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
     eval_t0 = time.time()
 
     rewards = []
-    grasp_not_over_blanket_count = 0
-    uncovered_target = []
-    uncovered_nontarget = []
-    covered_head = []
 
     for episode in range(n_episodes):
 
@@ -208,15 +204,10 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
         total_elapsed_time = t1-eval_t0
         elapsed_time = t1-t0
 
-        if info['clipped']:
-            grasp_not_over_blanket_count += 1
-
-        uncovered_target_count, uncovered_nontarget_count, covered_head_count = info['post_action_point_counts']
+        #if info['clipped']:
+        #    grasp_not_over_blanket_count += 1
 
         rewards.append(reward)
-        uncovered_target.append(uncovered_target_count)
-        uncovered_nontarget.append(uncovered_nontarget_count)
-        covered_head.append(covered_head_count)
     
         pickle.dump({
             "total_elapsed_time":total_elapsed_time, 
@@ -227,7 +218,7 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
             "info":info}, f)
 
         if verbose:
-            print(f"Episode {episode+1} | Reward total: {reward}, Total Counts: {info['total_point_counts']}, Post Action: {info['post_action_point_counts']}")
+            print(f"Episode {episode+1} | Reward total: {reward}")
         sys.stdout.flush()
 
     env.disconnect()
@@ -236,10 +227,6 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
     # print('Rewards:', rewards)
     print('Reward Mean:', np.mean(rewards))
     print('Reward Std:', np.std(rewards))
-    print('Mean Uncovered Target:', np.mean(uncovered_target))
-    print('Mean Uncovered NonTarget:', np.mean(uncovered_nontarget))
-    print('Mean Covered Head:', np.mean(covered_head))
-    print('Number of cases where grasp not over blanket:', grasp_not_over_blanket_count)
 
 
     sys.stdout.flush()
