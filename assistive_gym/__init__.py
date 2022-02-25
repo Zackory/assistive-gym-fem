@@ -76,9 +76,9 @@ register(
 )
 #! ADDED FOR GNN TESTING
 register(
-    id='GNNDatasetCollect-v1',
-    entry_point='assistive_gym.envs:GNNDatasetCollectEnv',
-    max_episode_steps=1, #! set to 200 to keep rerolling if grasp not on sheet
+    id='BodiesUncoveredGNN-v1',
+    entry_point='assistive_gym.envs:BodiesUncoveredGNNEnv',
+    max_episode_steps=200, #! set to 200 to keep rerolling if grasp not on sheet
 )
 
 

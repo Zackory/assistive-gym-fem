@@ -10,11 +10,11 @@ def sample_action(env):
 
 def gnn_data_collect(env_name, i):
     coop = 'Human' in env_name
-    env = make_env(env_name, coop=True) if coop else gym.make(env_name)
+    seed = seeding.create_seed()
+    env = make_env(env_name, coop=coop, seed=seed)
 
     done = False
     #env.render()
-    env.set_seed_val(seeding.create_seed())
     observation = env.reset()
     pid = os.getpid()
     while not done:
@@ -22,7 +22,7 @@ def gnn_data_collect(env_name, i):
         # action = np.array([0,0,0,0])
         observation, reward, done, info = env.step(action)
     
-    filename = f"c{i}_{env.seed_val}_pid{pid}"
+    filename = f"c{i}_{seed}_pid{pid}"
     with open(os.path.join(pkl_loc, filename +".pkl"),"wb") as f:
         pickle.dump({
             "observation":observation, 
@@ -32,8 +32,6 @@ def gnn_data_collect(env_name, i):
     del env
     return output
 
-counter = 0
-
 def counter_callback(output):
     global counter
     counter += 1
@@ -42,15 +40,16 @@ def counter_callback(output):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Assistive Gym Environment Viewer')
-    parser.add_argument('--env', default='ScratchItchJaco-v1',
-                        help='Environment to test (default: ScratchItchJaco-v1)')
+    parser = argparse.ArgumentParser(description='Data collection for gnn training')
+    parser.add_argument('--env', default='BodiesUncoveredGNN-v1')
     args = parser.parse_args()
 
     current_dir = os.getcwd()
-    pkl_loc = os.path.join(current_dir,'gnn_test_dc/pickle544')
+    pkl_loc = os.path.join(current_dir,'gnn_new_data/akhil')
     pathlib.Path(pkl_loc).mkdir(parents=True, exist_ok=True)
 
+    # ! TODO: temporary to prevent messy prints, go back and fix where warning is coming from
+    np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
     counter = 0
 
@@ -58,11 +57,14 @@ if __name__ == "__main__":
     num_processes = multiprocessing.cpu_count() - 1
 
     # num data points to collect
-    trials = 10000
+    trials = 30000
 
-    # trials = 8
+    # trials = 4
     # num_processes = 4
+    counter = 0
 
+
+    # structured this way to prevent unusual errors in pybullet where cloth anchors do not get cleared correctly between trials
     result_objs = []
     for j in range(math.ceil(trials/num_processes)):
         with multiprocessing.Pool(processes=num_processes) as pool:
@@ -73,6 +75,8 @@ if __name__ == "__main__":
             results = [result.get() for result in result_objs]
             # print(len(results))
             # print(results)
+    
+    # print(results)
 
     # result_objs = []
     # with multiprocessing.Pool(processes=num_processes) as pool:

@@ -16,4 +16,4 @@ from assistive_gym.envs.bed_pose_envs import BedPosePR2Env, BedPosePR2MeshEnv, B
 from assistive_gym.envs.bedding_manipulation_envs import BeddingManipulationSphereEnv, BeddingManipulationStretchEnv
 from assistive_gym.envs.remove_contact_envs import RemoveContactSphereEnv
 from assistive_gym.envs.human_smplx_testing import HumanSMPLXTestingEnv
-from assistive_gym.envs.gnn_dataset_collect import GNNDatasetCollectEnv
+from assistive_gym.envs.bodies_uncovered_gnn import BodiesUncoveredGNNEnv
