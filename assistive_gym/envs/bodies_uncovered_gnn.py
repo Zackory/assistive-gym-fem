@@ -7,7 +7,7 @@ import pybullet as p
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
-from .bu_gnn_util import sub_sample_point_clouds, get_body_points_reward
+from .bu_gnn_util import sub_sample_point_clouds, get_body_points_from_obs, get_body_points_reward
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
@@ -31,14 +31,15 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.fixed_pose = False
         self.save_pstate = False
         self.pstate_file = None
-        self.collect_data = True
+        self.collect_data = False
         self.blanket_pose_var = False
         self.naive = False
 
         # self.single_model = True
 
-    def get_action(self, obs):
-        human_pose = self.human_pose
+    def get_naive_action(self, obs):
+        
+        human_pose = np.reshape(obs, (-1,2))
         feet_midpoint = (human_pose[3] + human_pose[9])/2
         knee_midpoint = (human_pose[4] + human_pose[10])/2
         hip_midpoint = (human_pose[5] + human_pose[11])/2
@@ -62,7 +63,6 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         
     def step(self, action):
         obs = self._get_obs()
-        self.human_pose = np.reshape(obs, (-1,2))
         # return obs, 0, True, {}
         # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
         
@@ -73,8 +73,9 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
         scale = [0.44, 1.05]
 
+
         if self.naive:
-            action = self.get_action(obs)
+            # action = self.get_action(obs)
             scale = [1, 1]
         grasp_loc = action[0:2]*scale
         release_loc = action[2:4]*scale
@@ -96,6 +97,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             # return obs, 0, True, {}
             if self.collect_data:
                 return obs, 0, False, {} # for data collect
+            else:
+                return obs, 0, True, {}
 
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
         # for a in anchor_idx:
@@ -150,23 +153,26 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
         reward = 0
         cloth_initial_subsample = cloth_final_subsample = -1 # none for data collection
-
+        info = {}
         if not self.collect_data:
             reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
             cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(data_i[1], data_f[1])
             cloth_initial_2D = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
             cloth_final_2D = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
-            reward = get_body_points_reward(obs, cloth_initial_2D, cloth_final_2D) + reward_distance_btw_grasp_release
-
-        info = {
-            "cloth_initial": data_i,
-            "cloth_final": data_f,
-            "RBG_human": self.human_no_occlusion_RGB,
-            "depth_human": self.human_no_occlusion_depth
-            # "cloth_initial_subsample": cloth_initial_subsample,
-            # "cloth_final_subsample": cloth_final_subsample,
-            # "covered_status_sim": self.covered_status
-            }
+            human_pose = np.reshape(obs, (-1,2))
+            all_body_points = get_body_points_from_obs(human_pose, target_limb_code=self.target_limb_code)
+            body_point_reward, covered_status = get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D)
+            reward = body_point_reward + reward_distance_btw_grasp_release
+        else:
+            info = {
+                "cloth_initial": data_i,
+                "cloth_final": data_f,
+                "RBG_human": self.human_no_occlusion_RGB,
+                "depth_human": self.human_no_occlusion_depth
+                # "cloth_initial_subsample": cloth_initial_subsample,
+                # "cloth_final_subsample": cloth_final_subsample,
+                # "covered_status_sim": self.covered_status
+                }
         self.iteration += 1
         done = self.iteration >= 1
 
@@ -210,7 +216,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
-
+        
         # * Setup human in the air, with legs and arms slightly seperated
         joints_positions = [(self.human.j_left_hip_y, -10), (self.human.j_right_hip_y, 10), (self.human.j_left_shoulder_x, -20), (self.human.j_right_shoulder_x, 20)]
         self.human.setup_joints(joints_positions, use_static_joints=False, reactive_force=None)
@@ -270,7 +276,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         # self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
 
         #! Just to generate points on the body (none considered target)
-        self.target_limb = self.target_limb_code = []
+        # self.target_limb = self.target_limb_code = []
 
         # self.generate_points_along_body()
         # self.get_point_cloud()
