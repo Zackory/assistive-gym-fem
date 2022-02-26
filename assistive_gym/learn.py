@@ -12,6 +12,7 @@ import keras
 
 def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
     num_processes = multiprocessing.cpu_count()
+    num_processes = 100 if num_processes > 100 else num_processes # reduce batch size to prevent memory issues
     if algo == 'ppo':
         config = ppo.DEFAULT_CONFIG.copy()
         config['train_batch_size'] = num_processes
