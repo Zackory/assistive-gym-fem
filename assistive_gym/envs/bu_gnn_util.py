@@ -34,7 +34,7 @@ obs_limbs = {
     46:[[9], 'foot'],           # left foot: ankle
     43:[[9,10], 'shin'],        # left shin: ankle -> knee
     42:[[10,11], 'thigh'],      # left thigh: knee -> hip
-    8:[[12], 'upperchest'],     # upperchest
+    8:[[12], ('upperchest', 'waist')],     # upperchest
     32:[[13], 'head']}          # head
 
 # indices of human_pose (from obs) that give the x,y pose of the joints that define the target body part
@@ -94,6 +94,21 @@ def get_circular_limb_points(point, radius=None, num_rings=None):
     circles = np.concatenate(circles)
     return circles
 
+#%%
+def get_torso_points(human_pose, radius_upperchest, radius_waist, num_rings):
+    shoulder_midpoint = (human_pose[2] + human_pose[8])/2
+    hip_midpoint = (human_pose[5] + human_pose[11])/2
+    # print(radius_upperchest, radius_waist)
+    
+    calc_chest = (human_pose[12] + shoulder_midpoint)/2
+    calc_waist = (human_pose[12] + hip_midpoint)/2
+
+    offset = 0.005 # subtract this offest to prevent overlap of torso points with hip and shoulder points
+    chest_points = get_circular_limb_points(calc_chest, radius=radius_upperchest-offset, num_rings=num_rings)
+    waist_points = get_circular_limb_points(calc_waist, radius=radius_waist-offset, num_rings=num_rings)
+
+    return np.concatenate((chest_points, waist_points))
+
 
 #%%
 def get_body_points_from_obs(human_pose, target_limb_code):
@@ -101,11 +116,13 @@ def get_body_points_from_obs(human_pose, target_limb_code):
 
     target_points = []
     nontarget_points = []
-    all_points = []
+    all_body_points = []
     for limb, limb_info in obs_limbs.items():
         joints = limb_info[0]
         limb_name = limb_info[1]
-        if len(joints) == 1:
+        if limb == 8:
+            limb_points = get_torso_points(human_pose, radius_upperchest=body_info[limb_name[0]][1], radius_waist=body_info[limb_name[1]][1], num_rings=limb_config[limb_name[0]][0])
+        elif len(joints) == 1:
             limb_points = get_circular_limb_points(
                 human_pose[joints[0]], radius=body_info[limb_name][1], num_rings=limb_config[limb_name][0])
         else:
@@ -116,9 +133,9 @@ def get_body_points_from_obs(human_pose, target_limb_code):
         num_limb_points = len(limb_points)
         is_target = np.ones((num_limb_points, 1)) if limb in all_possible_target_limbs[target_limb_code] else np.zeros((num_limb_points, 1))
         is_target = is_target - 1 if limb is 32 else is_target # if the point is on the head, val is -1
-        all_points.append(np.hstack((limb_points, is_target)))
+        all_body_points.append(np.hstack((limb_points, is_target)))
     
-    return np.concatenate(all_points)
+    return np.concatenate(all_body_points)
         # if limb in all_possible_target_limbs[target_limb_code]:
         #     target_points.append(limb_points)
         # else:
@@ -155,10 +172,10 @@ def sub_sample_point_clouds(cloth_initial_3D_pos, cloth_final_3D_pos, voxel_size
     return cloth_initial_subsample, cloth_final_subsample
 
 #%%
-def get_covered_status(all_points, cloth_state_2D):
+def get_covered_status(all_body_points, cloth_state_2D):
         covered_status = []
 
-        for body_point in all_points.tolist():
+        for body_point in all_body_points.tolist():
             is_covered = False
             for cloth_point in cloth_state_2D:
                 if np.linalg.norm(cloth_point - body_point[0:2]) <= 0.05:
@@ -170,9 +187,9 @@ def get_covered_status(all_points, cloth_state_2D):
         return covered_status
 
 #%%
-def get_body_points_reward(all_points, cloth_initial_2D, cloth_final_2D):
-        initially_covered_status = get_covered_status(all_points, cloth_initial_2D)
-        covered_status = get_covered_status(all_points, cloth_final_2D)
+def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
+        initially_covered_status = get_covered_status(all_body_points, cloth_initial_2D)
+        covered_status = get_covered_status(all_body_points, cloth_final_2D)
 
 
         # head_ind = len(covered_status)-1
@@ -190,8 +207,8 @@ def get_body_points_reward(all_points, cloth_initial_2D, cloth_final_2D):
             elif is_target == 0 and not is_covered and is_initially_covered:
                 nontarget_uncovered_penalty += 1
 
-        num_target = np.count_nonzero(all_points[:,2] == 1)
-        num_head = np.count_nonzero(all_points[:,2] == -1)
+        num_target = np.count_nonzero(all_body_points[:,2] == 1)
+        num_head = np.count_nonzero(all_body_points[:,2] == -1)
         target_uncovered_reward = 100*(target_uncovered_reward/num_target)
         nontarget_uncovered_penalty = -100*(nontarget_uncovered_penalty/num_target)
         head_covered_penalty = -200*(head_covered_penalty/num_head)
@@ -212,15 +229,16 @@ def get_body_points_reward(all_points, cloth_initial_2D, cloth_final_2D):
 
 # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
 # # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10109917428862267910_pid41377.pkl'
+# target_limb_code = 14
 # raw_data = pickle.load(open(filename_env,'rb'))
 # human_pose = np.reshape(raw_data['observation'][0], (-1,2))
-# all_points = get_body_points_from_obs(human_pose, 14)
+# all_body_points = get_body_points_from_obs(human_pose, target_limb_code=target_limb_code)
 
 # cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(raw_data['info']['cloth_initial'][1], raw_data['info']['cloth_final'][1])
 # cloth_initial = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
 # cloth_final = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
 
-# reward, covered_status = get_body_points_reward(all_points, cloth_initial, cloth_final)
+# reward, covered_status = get_body_points_reward(all_body_points, cloth_initial, cloth_final)
 
 # print(reward)
 
@@ -237,7 +255,7 @@ def get_body_points_reward(all_points, cloth_initial_2D, cloth_final_2D):
 #     point_colors.append(color)
 
 # plt.figure(figsize=[4, 6])
-# plt.scatter(all_points[:,0], all_points[:,1], c=point_colors)
+# plt.scatter(all_body_points[:,0], all_body_points[:,1], c=point_colors)
 # plt.scatter(human_pose[:,0], human_pose[:,1], c='navy')
 
 # ntarg = mlines.Line2D([], [], color='darkorange', marker='o', linestyle='None', label='uncovered points')
