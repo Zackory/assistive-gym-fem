@@ -179,6 +179,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         # return 0, 0, 1, {}
         return obs, reward, done, info
     
+    def get_cloth_state(self):
+        return p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)[1]
 
     def _get_obs(self, agent=None):
 
