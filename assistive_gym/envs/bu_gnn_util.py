@@ -2,6 +2,7 @@
 import pickle, os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 
 #%%
 body_info = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'body_info.pkl'),'rb'))
@@ -172,15 +173,14 @@ def sub_sample_point_clouds(cloth_initial_3D_pos, cloth_final_3D_pos, voxel_size
     return cloth_initial_subsample, cloth_final_subsample
 
 #%%
+# improved performance by using numpy operations instead of looping over the points in the array
 def get_covered_status(all_body_points, cloth_state_2D):
         covered_status = []
 
-        for body_point in all_body_points.tolist():
+        for body_point in all_body_points:
             is_covered = False
-            for cloth_point in cloth_state_2D:
-                if np.linalg.norm(cloth_point - body_point[0:2]) <= 0.05:
-                    is_covered = True
-                    break
+            if np.any(np.linalg.norm(cloth_state_2D - body_point[0:2], axis=1) <= 0.05):
+                is_covered = True
             is_target = body_point[2] # 1 = target, 0 = nontarget, -1 = head
             covered_status.append([is_target, is_covered]) 
         
@@ -188,47 +188,54 @@ def get_covered_status(all_body_points, cloth_state_2D):
 
 #%%
 def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
-        initially_covered_status = get_covered_status(all_body_points, cloth_initial_2D)
-        covered_status = get_covered_status(all_body_points, cloth_final_2D)
+    initially_covered_status = get_covered_status(all_body_points, cloth_initial_2D)
+    covered_status = get_covered_status(all_body_points, cloth_final_2D)
 
 
-        # head_ind = len(covered_status)-1
-        target_uncovered_reward = 0
-        nontarget_uncovered_penalty = 0
-        head_covered_penalty = 0
-        for i in range(len(covered_status)):
-            is_target = covered_status[i][0]
-            is_covered = covered_status[i][1]
-            is_initially_covered = initially_covered_status[i][1]
-            if is_target == 1 and not is_covered: # target uncovered reward
-                target_uncovered_reward += 1
-            elif is_target == -1 and is_covered: # head covered penalty
-                head_covered_penalty = 1
-            elif is_target == 0 and not is_covered and is_initially_covered:
-                nontarget_uncovered_penalty += 1
+    # head_ind = len(covered_status)-1
+    target_uncovered_reward = 0
+    nontarget_uncovered_penalty = 0
+    head_covered_penalty = 0
+    for i in range(len(covered_status)):
+        is_target = covered_status[i][0]
+        is_covered = covered_status[i][1]
+        is_initially_covered = initially_covered_status[i][1]
+        if is_target == 1 and not is_covered: # target uncovered reward
+            target_uncovered_reward += 1
+        elif is_target == -1 and is_covered: # head covered penalty
+            head_covered_penalty = 1
+        elif is_target == 0 and not is_covered and is_initially_covered:
+            nontarget_uncovered_penalty += 1
+    # print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
+    num_target = np.count_nonzero(all_body_points[:,2] == 1)
+    num_head = np.count_nonzero(all_body_points[:,2] == -1)
+    target_uncovered_reward = 100*(target_uncovered_reward/num_target)
+    nontarget_uncovered_penalty = -100*(nontarget_uncovered_penalty/num_target)
+    head_covered_penalty = -200*(head_covered_penalty/num_head)
+    reward = target_uncovered_reward + nontarget_uncovered_penalty + head_covered_penalty
+    # print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
+    # if self.rendering:
+    #     print('initial covered', initially_covered_status)
+    #     print('covered', covered_status)
+    #     print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
+    #     print(reward)
+    # self.covered_status = covered_status
 
-        num_target = np.count_nonzero(all_body_points[:,2] == 1)
-        num_head = np.count_nonzero(all_body_points[:,2] == -1)
-        target_uncovered_reward = 100*(target_uncovered_reward/num_target)
-        nontarget_uncovered_penalty = -100*(nontarget_uncovered_penalty/num_target)
-        head_covered_penalty = -200*(head_covered_penalty/num_head)
-        reward = target_uncovered_reward + nontarget_uncovered_penalty + head_covered_penalty
-        # print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
-        # if self.rendering:
-        #     print('initial covered', initially_covered_status)
-        #     print('covered', covered_status)
-        #     print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
-        #     print(reward)
-        # self.covered_status = covered_status
-
-        return reward, covered_status
+    return reward, covered_status
 
 #%%
-# ## TEST VISUALIZATION OF BODY POINTS
+def randomize_target_limbs():
+    target_limb_code = np.random.default_rng().integers(len(all_possible_target_limbs))
+    return target_limb_code
+#%%
+# # ## TEST VISUALIZATION OF BODY POINTS
 # import matplotlib.lines as mlines
+# import time
+# t0 = time.time()
 
-# filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
-# # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10109917428862267910_pid41377.pkl'
+# # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
+# filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10109917428862267910_pid41377.pkl'
+# filename_env = '/home/kpputhuveetil/git/vBM-GNNdev/gnn_new_data/raw/c0_24035249859464233_pid95651.pkl'
 # target_limb_code = 14
 # raw_data = pickle.load(open(filename_env,'rb'))
 # human_pose = np.reshape(raw_data['observation'][0], (-1,2))
@@ -240,7 +247,7 @@ def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
 
 # reward, covered_status = get_body_points_reward(all_body_points, cloth_initial, cloth_final)
 
-# print(reward)
+# print('Reward:',reward)
 
 # point_colors = []
 # for point in covered_status:
@@ -256,7 +263,7 @@ def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
 
 # plt.figure(figsize=[4, 6])
 # plt.scatter(all_body_points[:,0], all_body_points[:,1], c=point_colors)
-# plt.scatter(human_pose[:,0], human_pose[:,1], c='navy')
+# # plt.scatter(human_pose[:,0], human_pose[:,1], c='navy')
 
 # ntarg = mlines.Line2D([], [], color='darkorange', marker='o', linestyle='None', label='uncovered points')
 # targ = mlines.Line2D([], [], color='forestgreen', marker='o', linestyle='None', label='target points')
@@ -266,6 +273,7 @@ def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
 # # plt.legend(loc='lower left', prop={'size': 9}, handles=[ntarg, targ, obs])
 # plt.gca().invert_yaxis()
 # plt.show()
+# print('Time:', time.time()-t0)
 
 
 # %%
