@@ -1,13 +1,9 @@
 import os, time
 import numpy as np
-from numpy.core.fromnumeric import reshape
-from numpy.core.numeric import False_
-from numpy.lib.function_base import append
 import pybullet as p
-import matplotlib.pyplot as plt
-from PIL import Image
+
 import cv2
-from .bu_gnn_util import sub_sample_point_clouds, get_body_points_from_obs, get_body_points_reward
+from .bu_gnn_util import sub_sample_point_clouds, get_body_points_from_obs, get_body_points_reward, all_possible_target_limbs, randomize_target_limbs
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
@@ -20,22 +16,26 @@ human_controllable_joint_indices = []
 
 class BodiesUncoveredGNNEnv(AssistiveEnv):
     def __init__(self):
-        super(BodiesUncoveredGNNEnv, self).__init__(robot=None, human=Human(human_controllable_joint_indices, controllable=True), task='bedding_manipulation', obs_robot_len=28, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
+        obs_robot_len = 28
+        self.single_ppo_model = True # will randomize target limb
+        if self.single_ppo_model:
+            obs_robot_len = 28 + len(all_possible_target_limbs)
+        
+        super(BodiesUncoveredGNNEnv, self).__init__(robot=None, human=Human(human_controllable_joint_indices, controllable=True), task='bedding_manipulation', obs_robot_len=obs_robot_len, obs_human_len=0, frame_skip=1, time_step=0.01, deformable=True)
         self.use_mesh = False
         
         self.take_pictures = False
         self.rendering = False
-        self.fixed_target = True
-        self.target_limb_code = []
-        self.target_limb_code = 14
+        self.target_limb_code = 14 if not self.single_ppo_model else None # randomize in reset function, None acts as a placeholder
         self.fixed_pose = False
-        self.save_pstate = False
-        self.pstate_file = None
         self.collect_data = False
         self.blanket_pose_var = False
         self.naive = False
+        self.clip = True
 
-        # self.single_model = True
+        self.human_no_occlusion_RGB = None
+        self.human_no_occlusion_depth = None
+
 
     def get_naive_action(self, obs):
         
@@ -97,7 +97,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             # return obs, 0, True, {}
             if self.collect_data:
                 return obs, 0, False, {} # for data collect
-            else:
+            elif self.clip:
                 return obs, 0, True, {}
 
         anchor_idx = np.argpartition(np.array(dist), 4)[:4]
@@ -163,16 +163,15 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             all_body_points = get_body_points_from_obs(human_pose, target_limb_code=self.target_limb_code)
             body_point_reward, covered_status = get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D)
             reward = body_point_reward + reward_distance_btw_grasp_release
-        else:
-            info = {
-                "cloth_initial": data_i,
-                "cloth_final": data_f,
-                "RBG_human": self.human_no_occlusion_RGB,
-                "depth_human": self.human_no_occlusion_depth
-                # "cloth_initial_subsample": cloth_initial_subsample,
-                # "cloth_final_subsample": cloth_final_subsample,
-                # "covered_status_sim": self.covered_status
-                }
+        info = {
+            "cloth_initial": data_i,
+            "cloth_final": data_f,
+            "RBG_human": self.human_no_occlusion_RGB,
+            "depth_human": self.human_no_occlusion_depth,
+            "cloth_initial_subsample": cloth_initial_subsample,
+            "cloth_final_subsample": cloth_final_subsample,
+            "covered_status_sim": covered_status
+            }
         self.iteration += 1
         done = self.iteration >= 1
 
@@ -205,16 +204,18 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             return output
 
             
-        # if self.single_model:
-        #     one_hot_target_limb = [0]*len(self.human.all_possible_target_limbs)
-        #     one_hot_target_limb[self.target_limb_code] = 1
-        #     pose = np.concatenate([one_hot_target_limb, pose], axis=0)
+        if self.single_ppo_model:
+            one_hot_target_limb = [0]*len(self.human.all_possible_target_limbs)
+            one_hot_target_limb[self.target_limb_code] = 1
+            pose = np.concatenate([one_hot_target_limb, pose], axis=0)
         return np.float32(pose)
 
     def reset(self):
 
         super(BodiesUncoveredGNNEnv, self).reset()
         self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
+
+        self.target_limb_code = self.target_limb_code if not self.single_ppo_model else randomize_target_limbs()
 
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
@@ -271,17 +272,6 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             chair_seat_position = np.array([0, 0.1, 0.55])
             self.human.set_base_pos_orient(chair_seat_position - self.human.get_vertex_positions(self.human.bottom_index), [0, 0, 0, 1])
     
-
-        # * select a target limb to uncover (may be fixed or random) 
-        # if not self.fixed_target:
-        #     self.set_target_limb_code()
-        # self.target_limb = self.human.all_possible_target_limbs[self.target_limb_code]
-
-        #! Just to generate points on the body (none considered target)
-        # self.target_limb = self.target_limb_code = []
-
-        # self.generate_points_along_body()
-        # self.get_point_cloud()
        
         # * spawn blanket
         self.blanket = p.loadSoftBody(os.path.join(self.directory, 'clothing', 'blanket_2089v.obj'), scale=0.75, mass=0.15, useBendingSprings=1, useMassSpring=1, springElasticStiffness=1, springDampingStiffness=0.0005, springDampingAllDirections=1, springBendingStiffness=0, useSelfCollision=1, collisionMargin=0.006, frictionCoeff=0.5, useFaceContact=1, physicsClientId=self.id)
@@ -341,10 +331,6 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             self.observation_space_human = spaces.Box(low=np.array([-1000000000.0]*self.obs_human_len, dtype=np.float32), high=np.array([1000000000.0]*self.obs_human_len, dtype=np.float32), dtype=np.float32)
         else:
             self.init_env_variables()
-        
-        if self.save_pstate:
-            p.saveBullet(self.pstate_file)
-            self.save_pstate = False
         
         
         # * Setup camera for taking images
