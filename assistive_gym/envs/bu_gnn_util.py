@@ -223,10 +223,28 @@ def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
 
     return reward, covered_status
 
+def get_reward(action, all_body_points, cloth_initial_2D, cloth_final_2D):
+    reward_distance_btw_grasp_release = -150 if np.linalg.norm(action[0:2] - action[2:]) >= 1.5 else 0
+    body_point_reward, covered_status = get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D)
+    reward = body_point_reward + reward_distance_btw_grasp_release
+    return reward, covered_status
+
 #%%
 def randomize_target_limbs():
     target_limb_code = np.random.default_rng().integers(len(all_possible_target_limbs))
     return target_limb_code
+
+def scale_action(action, scale=[0.44, 1.05]):
+    scale = scale*2
+    return scale*action
+
+# clipping threshold 0.028 if not subsampled gt cloth points, 0.05
+def check_grasp_on_cloth(action, cloth_initial, clipping_thres=0.028):
+    grasp_loc = action[0:2]
+    dist = np.linalg.norm(cloth_initial[:,0:2] - grasp_loc, axis=1)
+    # * if no points on the blanket are within 2.8 cm of the grasp location, clip
+    is_on_cloth = (np.any(np.array(dist) < clipping_thres)) 
+    return dist, is_on_cloth
 #%%
 # # ## TEST VISUALIZATION OF BODY POINTS
 # import matplotlib.lines as mlines
@@ -239,6 +257,7 @@ def randomize_target_limbs():
 # target_limb_code = 14
 # raw_data = pickle.load(open(filename_env,'rb'))
 # human_pose = np.reshape(raw_data['observation'][0], (-1,2))
+# action = raw_data['action']
 # all_body_points = get_body_points_from_obs(human_pose, target_limb_code=target_limb_code)
 
 # cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(raw_data['info']['cloth_initial'][1], raw_data['info']['cloth_final'][1])
