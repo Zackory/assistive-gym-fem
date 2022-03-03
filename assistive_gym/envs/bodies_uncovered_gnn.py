@@ -3,7 +3,7 @@ import numpy as np
 import pybullet as p
 
 import cv2
-from .bu_gnn_util import sub_sample_point_clouds, get_body_points_from_obs, get_body_points_reward, all_possible_target_limbs, randomize_target_limbs
+from .bu_gnn_util import sub_sample_point_clouds, get_body_points_from_obs, get_body_points_reward, all_possible_target_limbs, randomize_target_limbs, scale_action, check_grasp_on_cloth
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
@@ -17,7 +17,7 @@ human_controllable_joint_indices = []
 class BodiesUncoveredGNNEnv(AssistiveEnv):
     def __init__(self):
         obs_robot_len = 28
-        self.single_ppo_model = True # will randomize target limb
+        self.single_ppo_model = False # will randomize target limb
         if self.single_ppo_model:
             obs_robot_len = 28 + len(all_possible_target_limbs)
         
@@ -36,6 +36,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.human_no_occlusion_RGB = None
         self.human_no_occlusion_depth = None
 
+    def set_target_limb_code(self, code):
+        self.target_limb_code = code
 
     def get_naive_action(self, obs):
         
@@ -69,29 +71,28 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         if self.rendering:
             print(obs)
             print(action)
+            print(self.target_limb_code)
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
-        scale = [0.44, 1.05]
+        # * if using the naive approach, do not scale the action since it is determined directly from points over the bed
+        action = scale_action(action) if not self.naive else scale_action(action, scale=[1, 1])
 
-
-        if self.naive:
-            # action = self.get_action(obs)
-            scale = [1, 1]
-        grasp_loc = action[0:2]*scale
-        release_loc = action[2:4]*scale
+        grasp_loc = action[0:2]
+        release_loc = action[2:4]
 
         # * get points on the blanket, initial state of the cloth
         data_i = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
 
         # * calculate distance between the 2D grasp location and every point on the blanket, anchor points are the 4 points on the blanket closest to the 2D grasp location
-        dist = []
-        for i, v in enumerate(data_i[1]):
-            v = np.array(v)
-            d = np.linalg.norm(v[0:2] - grasp_loc)
-            dist.append(d)
+        dist, is_on_cloth = check_grasp_on_cloth(action, data_i[1])
+        # dist = []
+        # for i, v in enumerate(data_i[1]):
+        #     v = np.array(v)
+        #     d = np.linalg.norm(v[0:2] - grasp_loc)
+        #     dist.append(d)
         # * if no points on the blanket are within 2.8 cm of the grasp location, exit 
         clipped = False
-        if not np.any(np.array(dist) < 0.028):
+        if not is_on_cloth:
             clipped = True
             # print("clip")
             # return obs, 0, True, {}
@@ -155,6 +156,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         cloth_initial_subsample = cloth_final_subsample = -1 # none for data collection
         info = {}
         if not self.collect_data:
+            #! REPLACE REWARD CALCULATION HERE WTIH FUNCTION FROM GNN_UTIL
             reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
             cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(data_i[1], data_f[1])
             cloth_initial_2D = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
@@ -170,7 +172,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             "depth_human": self.human_no_occlusion_depth,
             "cloth_initial_subsample": cloth_initial_subsample,
             "cloth_final_subsample": cloth_final_subsample,
-            "covered_status_sim": covered_status
+            "covered_status_sim": covered_status,
+            "target_limb_code":self.target_limb_code
             }
         self.iteration += 1
         done = self.iteration >= 1
@@ -350,88 +353,3 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             # cv2.imwrite(filename, depth_colormap)
 
         return self._get_obs()
-    
-    def generate_points_along_body(self):
-        '''
-        generate all the target/nontarget posistions necessary to uniformly cover the body parts with points
-        if rendering, generates sphere bodies as well
-        '''
-
-        self.points_pos_on_target_limb = {}
-        self.points_target_limb = {}
-        self.total_target_point_count = 0
-
-        self.points_pos_on_nontarget_limb = {}
-        self.points_nontarget_limb = {}
-        self.total_nontarget_point_count = 0
-
-        #! just for tuning points on torso
-        # self.human.all_body_parts = [self.human.waist]
-
-        # * create points on all the body parts
-        for limb in self.human.all_body_parts:
-
-            # * get the length and radius of the given body part
-            length, radius = self.human.body_info[limb] if limb not in self.human.limbs_need_corrections else self.human.body_info[limb][0]
-
-            # * create points seperately depending on whether or not the body part is/is a part of the target limb
-            # *     generates list of point positions around the body part capsule (sphere if the hands)
-            # *     creates all the spheres necessary to uniformly cover the body part (spheres created at some arbitrary position (transformed to correct location in update_points_along_body())
-            # *     add to running total of target/nontarget points
-            # *     only generate sphere bodies if self.rendering == True
-            if limb in self.target_limb:
-                if limb in [self.human.left_hand, self.human.right_hand]:
-                    self.points_pos_on_target_limb[limb] = self.util.sphere_points(radius=radius, samples = 20)
-                else:
-                    self.points_pos_on_target_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-                if self.rendering:
-                    self.points_target_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_target_limb[limb]), visual=True, collision=False, rgba=[1, 1, 1, 1])
-                self.total_target_point_count += len(self.points_pos_on_target_limb[limb])
-            else:
-                if limb in [self.human.left_hand, self.human.right_hand]:
-                    self.points_pos_on_nontarget_limb[limb] = self.util.sphere_points(radius=radius, samples = 20)
-                else:
-                    self.points_pos_on_nontarget_limb[limb] = self.util.capsule_points(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, distance_between_points=0.03)
-                if self.rendering:
-                    self.points_nontarget_limb[limb] = self.create_spheres(radius=0.01, mass=0.0, batch_positions=[[0, 0, 0]]*len(self.points_pos_on_nontarget_limb[limb]), visual=True, collision=False, rgba=[0, 0, 1, 1])
-                self.total_nontarget_point_count += len(self.points_pos_on_nontarget_limb[limb])
-
-        # * transforms the generated spheres to the correct coordinate space (aligns points to the limbs)
-        self.update_points_along_body()
-    
-    def update_points_along_body(self):
-        '''
-        transforms the target/nontarget points created in generate_points_along_body() to the correct coordinate space so that they are aligned with their respective body part
-        if rendering, transforms the sphere bodies as well
-        '''
-
-        # * positions of the points on the target/nontarget limbs in world coordinates
-        self.points_pos_target_limb_world = {}
-        self.points_pos_nontarget_limb_world = {}
-
-        # * transform all spheres for all the body parts
-        for limb in self.human.all_body_parts:
-
-            # * get current position and orientation of the limbs, apply a correction to the pos, orient if necessary
-            limb_pos, limb_orient = self.human.get_pos_orient(limb)
-            if limb in self.human.limbs_need_corrections:
-                limb_pos = limb_pos + self.human.body_info[limb][1]
-                limb_orient = self.get_quaternion(self.get_euler(limb_orient) + self.human.body_info[limb][2])
-            
-            # * transform target/nontarget point positions to the world coordinate system so they align with the body parts
-            points_pos_limb_world = []
-
-            if limb in self.target_limb:
-                for i in range(len(self.points_pos_on_target_limb[limb])):
-                    point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, self.points_pos_on_target_limb[limb][i], [0, 0, 0, 1], physicsClientId=self.id)[0])
-                    points_pos_limb_world.append(point_pos)
-                    if self.rendering:
-                        self.points_target_limb[limb][i].set_base_pos_orient(point_pos, [0, 0, 0, 1])
-                self.points_pos_target_limb_world[limb] = points_pos_limb_world
-            else:
-                for i in range(len(self.points_pos_on_nontarget_limb[limb])):
-                    point_pos = np.array(p.multiplyTransforms(limb_pos, limb_orient, self.points_pos_on_nontarget_limb[limb][i], [0, 0, 0, 1], physicsClientId=self.id)[0])
-                    points_pos_limb_world.append(point_pos)
-                    if self.rendering:
-                        self.points_nontarget_limb[limb][i].set_base_pos_orient(point_pos, [0, 0, 0, 1])
-                self.points_pos_nontarget_limb_world[limb] = points_pos_limb_world
