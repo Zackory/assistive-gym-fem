@@ -387,6 +387,15 @@ class AssistiveEnv(gym.Env):
     def getRayFromTo(self, mouseX, mouseY):
         width, height, viewMat, projMat, cameraUp, camForward, horizon, vertical, _, _, dist, camTarget = p.getDebugVisualizerCamera(
         )
+
+        # print('get ray from to')
+        # print(width, height)
+        # print(camForward)
+        # print(horizon)
+        # print(vertical)
+        # print(dist)
+        # print(camTarget)
+        
         camPos = [
             camTarget[0] - dist * camForward[0], camTarget[1] - dist * camForward[1],
             camTarget[2] - dist * camForward[2]
@@ -425,18 +434,16 @@ class AssistiveEnv(gym.Env):
 
         # interesting quirk, pitch cannot = -90 due to Euler angle singularity (https://github.com/bulletphysics/bullet3/issues/2194)
         p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=90, cameraPitch=-89.99, cameraTargetPosition=[0, 0, 0], physicsClientId=self.id)
-        time.sleep
 
-
-        width, height, viewMat, projMat, cameraUp, camForward, horizon, vertical, _, _, dist, camTarget = p.getDebugVisualizerCamera(
+        width, height, viewMat, projMat, cameraUp, camForward, horizon, vertical, yaw, pitch, dist, camTarget = p.getDebugVisualizerCamera(
         )
-        print(width, height)
-        print(camForward)
-        print(horizon)
-        print(vertical)
-        print(dist)
-        print(camTarget)
-
+        # print('1 layer')
+        # print(width, height)
+        # print(camForward)
+        # print(horizon)
+        # print(vertical)
+        # print(dist)
+        # print(camTarget)
 
         camPos = [
             camTarget[0] - dist * camForward[0], camTarget[1] - dist * camForward[1],
@@ -463,19 +470,20 @@ class AssistiveEnv(gym.Env):
 
 
         img = p.getCameraImage(imgW, imgH, renderer=p.ER_BULLET_HARDWARE_OPENGL)
+        print(img)
         rgbBuffer = np.reshape(img[2], (imgH, imgW, 4))
         # NOTE: this depth buffer's reshaping does not match the [w, h] convention for
         # OpenGL depth buffers.  See getCameraImageTest.py for an OpenGL depth buffer
         depthBuffer = np.reshape(img[3], [imgH, imgW])
-        print("rgbBuffer.shape=", rgbBuffer.shape)
-        print("depthBuffer.shape=", depthBuffer.shape)
+        # print("rgbBuffer.shape=", rgbBuffer.shape)
+        # print("depthBuffer.shape=", depthBuffer.shape)
 
-        #disable rendering temporary makes adding objects faster
-        # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
-        # p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-        # p.configureDebugVisualizer(p.COV_ENABLE_TINY_RENDERER, 0)
-        visualShapeId = p.createVisualShape(shapeType=p.GEOM_SPHERE, rgbaColor=[1, 1, 1, 1], radius=0.01)
-        collisionShapeId = -1  #p.createCollisionShape(shapeType=p.GEOM_MESH, fileName="duck_vhacd.obj", collisionFramePosition=shift,meshScale=meshScale)
+        # disable rendering temporary makes adding objects faster
+        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_TINY_RENDERER, 0)
+        # visualShapeId = p.createVisualShape(shapeType=p.GEOM_SPHERE, rgbaColor=[1, 1, 1, 1], radius=0.01)
+        # collisionShapeId = -1  #p.createCollisionShape(shapeType=p.GEOM_MESH, fileName="duck_vhacd.obj", collisionFramePosition=shift,meshScale=meshScale)
 
         for i in range(4):
             w = cornersX[i]
@@ -488,20 +496,21 @@ class AssistiveEnv(gym.Env):
             newTo = (0.01 / l) * vec + rf
             #print("len vec=",np.sqrt(np.dot(vec,vec)))
 
-            p.addUserDebugLine(rayFrom, newTo, [1, 0, 0])
+            # p.addUserDebugLine(rayFrom, newTo, [1, 0, 0])
             corners3D.append(newTo)
         count = 0
 
         stepX = 2
         stepY = 2
 
+
         point_cloud = []
-        point_cloud_filtered = []
+        point_cloud_filtered = []  # * not used for data collection
         for w in range(0, imgW, stepX):
             for h in range(0, imgH, stepY):
                 count += 1
-                if ((count % 100) == 0):
-                    print(count, "out of ", imgW * imgH / (stepX * stepY))
+                # if ((count % 100) == 0):
+                #     print(count, "out of ", imgW * imgH / (stepX * stepY))
                 rayFrom, rayTo, alpha = self.getRayFromTo(w * (width / imgW), h * (height / imgH))
                 rf = np.array(rayFrom)
                 rt = np.array(rayTo)
@@ -515,27 +524,59 @@ class AssistiveEnv(gym.Env):
                 newTo = (depth / l) * vec + rf
                 point_cloud.append(newTo)
                 # p.addUserDebugLine(rayFrom, newTo, [1, 0, 0])
-                # z pos must be greater than height of the bed
-                if (newTo[2] > 0.585) and (abs(newTo[1])<1.05):
-                    point_cloud_filtered.append(newTo)
-                    mb = p.createMultiBody(baseMass=0,
-                                        baseCollisionShapeIndex=collisionShapeId,
-                                        baseVisualShapeIndex=visualShapeId,
-                                        basePosition=newTo,
-                                        useMaximalCoordinates=True)
-                    color = rgbBuffer[h, w]
-                    color = [color[0] / 255., color[1] / 255., color[2] / 255., 1]
-                    p.changeVisualShape(mb, -1, rgbaColor=color)
-        
 
-        p.addUserDebugLine(corners3D[0], corners3D[1], [1, 0, 0])
-        p.addUserDebugLine(corners3D[1], corners3D[2], [1, 0, 0])
-        p.addUserDebugLine(corners3D[2], corners3D[3], [1, 0, 0])
-        p.addUserDebugLine(corners3D[3], corners3D[0], [1, 0, 0])
+                # * don't filter point cloud for bu_gnn_naive, return unfiltered
+                # * z pos must be greater than height of the bed
+                # if (newTo[2] > 0.585) and (abs(newTo[1])<1.05):
+                #     point_cloud_filtered.append(newTo)
+                #     mb = p.createMultiBody(baseMass=0,
+                #                         baseCollisionShapeIndex=collisionShapeId,
+                #                         baseVisualShapeIndex=visualShapeId,
+                #                         basePosition=newTo,
+                #                         useMaximalCoordinates=True)
+                #     color = rgbBuffer[h, w]
+                #     color = [color[0] / 255., color[1] / 255., color[2] / 255., 1]
+                #     p.changeVisualShape(mb, -1, rgbaColor=color)
+
+        # p.addUserDebugLine(corners3D[0], corners3D[1], [1, 0, 0])
+        # p.addUserDebugLine(corners3D[1], corners3D[2], [1, 0, 0])
+        # p.addUserDebugLine(corners3D[2], corners3D[3], [1, 0, 0])
+        # p.addUserDebugLine(corners3D[3], corners3D[0], [1, 0, 0])
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
-        print("ready\n")
+        # print("ready\n")
         print(len(point_cloud), len(point_cloud_filtered))
-        return point_cloud_filtered
+        
+        # import pickle
+        # f = open('point_cloud_data.pkl', 'wb')
+
+        # # width, height, viewMat, projMat, cameraUp, camForward, horizon, vertical, _, _, dist, camTarget
+        # point_cloud_info = {
+        #     'width':width,
+        #     'height':height,
+        #     'viewMat':viewMat,
+        #     'projMat':projMat,
+        #     'cameraUp':cameraUp,
+        #     'camForward':camForward,
+        #     'horizon':horizon,
+        #     'vertical':vertical,
+        #     'dist':dist,
+        #     'camTarget':camTarget,
+        #     'imgW':imgW,
+        #     'imgH':imgW,
+        #     'w':w,
+        #     'h':h,
+        #     'yaw':yaw,
+        #     'pitch':pitch
+        # }
+        # pickle.dump(point_cloud_info, f)
+
+        return point_cloud
+    
+    def get_depth_image_for_point_cloud(self, image_width, image_height, view_matrix, projection_matrix):
+        # p.getCameraImage(self.camera_width, self.camera_height, self.view_matrix, self.projection_matrix, lightDirection=light_pos, shadow=shadow, lightAmbientCoeff=ambient, lightDiffuseCoeff=diffuse, lightSpecularCoeff=specular, renderer=p.ER_BULLET_HARDWARE_OPENGL, physicsClientId=self.id)
+        # p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=90, cameraPitch=-89.99, cameraTargetPosition=[0, 0, 0], physicsClientId=self.id)
+        img = p.getCameraImage(image_width, image_height, view_matrix, projection_matrix, renderer=p.ER_BULLET_HARDWARE_OPENGL)
+        return img
 
     def create_box(self, half_extents=[1, 1, 1], mass=0.0, pos=[0, 0, 0], orientation=[0, 0, 0, 1], visual=True, collision=True, rgba=[0, 1, 1, 1], maximal_coordinates=False, return_collision_visual=False):
         box_collision = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=half_extents, physicsClientId=self.id) if collision else -1
