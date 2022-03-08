@@ -14,7 +14,7 @@ def gnn_data_collect(env_name, i):
     env = make_env(env_name, coop=coop, seed=seed)
 
     done = False
-    #env.render()
+    # env.render()
     observation = env.reset()
     pid = os.getpid()
     while not done:
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     current_dir = os.getcwd()
-    pkl_loc = os.path.join(current_dir,'gnn_new_data/akhil')
+    pkl_loc = os.path.join(current_dir,'gnn_high_pose_var_data/akhil')
     pathlib.Path(pkl_loc).mkdir(parents=True, exist_ok=True)
 
     # ! TODO: temporary to prevent messy prints, go back and fix where warning is coming from
@@ -54,13 +54,14 @@ if __name__ == "__main__":
     counter = 0
 
     # reserve one cpu to keep working while collecting data
-    num_processes = multiprocessing.cpu_count() - 1
+    # num_processes = multiprocessing.cpu_count() - 1
+    num_processes = 100
 
     # num data points to collect
     trials = 30000
 
-    # trials = 4
-    # num_processes = 4
+    # trials = 1
+    # num_processes = 1
     counter = 0
 
 
