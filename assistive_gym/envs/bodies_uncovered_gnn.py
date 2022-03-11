@@ -29,7 +29,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.target_limb_code = 14 if not self.single_ppo_model else None # randomize in reset function, None acts as a placeholder
         self.fixed_pose = False
         self.collect_data = True
-        self.blanket_pose_var = False
+        self.blanket_pose_var = True
+        self.high_pose_var = False
         self.naive = False
         self.clip = True
 
@@ -310,7 +311,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             motor_indices, motor_positions, motor_velocities, motor_torques = self.human.get_motor_joint_states()
             # print(motor_positions)
             self.human.set_joint_angles(motor_indices, motor_positions+self.np_random.uniform(-0.2, 0.2, size=len(motor_indices)))
-            self.increase_pose_variation()
+            if self.high_pose_var:
+                self.increase_pose_variation()
             # * Increase friction of joints so human doesn't fail around exessively as they settle
             # print([p.getDynamicsInfo(self.human.body, joint)[1] for joint in self.human.all_joint_indices])
             self.human.set_whole_body_frictions(spinning_friction=2)
@@ -379,10 +381,10 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
 
         if self.blanket_pose_var:
-            delta_y = self.np_random.uniform(-0.05, 0.05)
+            delta_y = self.np_random.uniform(-0.25, 0.05)
             delta_x = self.np_random.uniform(-0.02, 0.02)
-            delta_rad = self.np_random.uniform(-0.0872665, 0.0872665) # 5 degrees
-
+            deg = 45
+            delta_rad = self.np_random.uniform(-np.radians(deg), np.radians(deg)) # * +/- degrees
             p.resetBasePositionAndOrientation(self.blanket, [0+delta_x, 0.2+delta_y, 1.5], self.get_quaternion([np.pi/2.0, 0, 0+delta_rad]), physicsClientId=self.id)
         else:
             p.resetBasePositionAndOrientation(self.blanket, [0, 0.2, 1.5], self.get_quaternion([np.pi/2.0, 0, 0]), physicsClientId=self.id)
@@ -393,7 +395,9 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         for _ in range(100):
             p.stepSimulation(physicsClientId=self.id)
 
-        # time.sleep(100)
+        # time.sleep(2)
+
+        # return 0
 
 
         # data = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
