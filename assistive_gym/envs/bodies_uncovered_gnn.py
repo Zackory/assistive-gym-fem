@@ -152,7 +152,6 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
         # * calculate distance between the 2D grasp location and every point on the blanket, anchor points are the 4 points on the blanket closest to the 2D grasp location
         dist, is_on_cloth = check_grasp_on_cloth(action, np.array(data_i[1]))
-
         # * if no points on the blanket are within 2.8 cm of the grasp location, exit 
         clipped = False
         if not is_on_cloth:
