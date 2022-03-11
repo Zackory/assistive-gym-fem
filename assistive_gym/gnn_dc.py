@@ -45,7 +45,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     current_dir = os.getcwd()
-    pkl_loc = os.path.join(current_dir,'gnn_high_pose_var_data/akhil')
+    pkl_loc = os.path.join(current_dir,'gnn_blanket_var_data/akhil')
     pathlib.Path(pkl_loc).mkdir(parents=True, exist_ok=True)
 
     # ! TODO: temporary to prevent messy prints, go back and fix where warning is coming from
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     num_processes = 100
 
     # num data points to collect
-    trials = 30000
+    trials = 20000
 
     # trials = 1
     # num_processes = 1
