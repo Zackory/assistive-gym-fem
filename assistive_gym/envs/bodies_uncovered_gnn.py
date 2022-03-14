@@ -17,7 +17,7 @@ human_controllable_joint_indices = []
 class BodiesUncoveredGNNEnv(AssistiveEnv):
     def __init__(self):
         obs_robot_len = 28
-        self.single_ppo_model = False # will randomize target limb
+        self.single_ppo_model = True # will randomize target limb
         if self.single_ppo_model:
             obs_robot_len = 28 + len(all_possible_target_limbs)
         
@@ -28,7 +28,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.rendering = False
         self.target_limb_code = 14 if not self.single_ppo_model else None # randomize in reset function, None acts as a placeholder
         self.fixed_pose = False
-        self.collect_data = True
+        self.collect_data = False
         self.blanket_pose_var = True
         self.high_pose_var = False
         self.naive = False
@@ -229,7 +229,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(data_i[1], data_f[1])
             cloth_initial_2D = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
             cloth_final_2D = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
-            human_pose = np.reshape(obs, (-1,2))
+            human_pose = np.reshape(self.human_pose, (-1,2))
+            print(human_pose)
             all_body_points = get_body_points_from_obs(human_pose, target_limb_code=self.target_limb_code)
             body_point_reward, covered_status = get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D)
             reward = body_point_reward + reward_distance_btw_grasp_release
@@ -274,6 +275,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             # pose.append(np.concatenate((pos2D, np.array([yaw])), axis=0))
             pose.append(pos2D)
         pose = np.concatenate(pose, axis=0)
+        self.human_pose = pose
 
         if self.collect_data:
 
