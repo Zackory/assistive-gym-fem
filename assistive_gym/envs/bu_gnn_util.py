@@ -80,7 +80,6 @@ def get_rectangular_limb_points(point1, point2, capsule_radius=None, length_poin
 
     return grid_r[:-width_points,:]
 
-#%%
 # https://stackoverflow.com/questions/33510979/generator-of-evenly-spaced-points-in-a-circle-in-python
 def get_circular_limb_points(point, radius=None, num_rings=None):
     r = np.linspace(0, radius, num_rings)
@@ -95,7 +94,7 @@ def get_circular_limb_points(point, radius=None, num_rings=None):
     circles = np.concatenate(circles)
     return circles
 
-#%%
+
 def get_torso_points(human_pose, radius_upperchest, radius_waist, num_rings):
     shoulder_midpoint = (human_pose[2] + human_pose[8])/2
     hip_midpoint = (human_pose[5] + human_pose[11])/2
@@ -111,9 +110,12 @@ def get_torso_points(human_pose, radius_upperchest, radius_waist, num_rings):
     return np.concatenate((chest_points, waist_points))
 
 
-#%%
 def get_body_points_from_obs(human_pose, target_limb_code):
     # global obs_limbs, limb_config, all_possible_target_limbs
+
+    # TESTING ONLY: Move the human around so blanket covers different limbs
+    # for i in range(len(human_pose)):
+    #     human_pose[i, 1] += 0.15
 
     target_points = []
     nontarget_points = []
@@ -184,7 +186,42 @@ def get_covered_status(all_body_points, cloth_state_2D):
             is_target = body_point[2] # 1 = target, 0 = nontarget, -1 = head
             covered_status.append([is_target, is_covered]) 
         
+        covered_status = get_closest_t_to_nt_points(all_body_points, covered_status)
         return covered_status
+
+#%%
+def get_closest_t_to_nt_points(all_body_points, covered_status):
+    # for i in range(len(all_body_points)):
+    #     if
+    # nt_points_2D = all_body_points[covered_status[:,0] == 0][:, 0:2]
+    covered_status = np.array(covered_status)
+    t_points_2D = all_body_points[covered_status[:,0] == 1][:, 0:2]
+
+    min_dists = []
+    # for nt_point in nt_points_2D:
+    for i in range(len(all_body_points)):
+        if covered_status[i,0] == 0:
+            nt_point = all_body_points[i]
+            min_dist_to_t_point = np.min(np.linalg.norm(t_points_2D - nt_point[0:2], axis=1))
+            min_dists.append(min_dist_to_t_point)
+        else:
+            min_dists.append(np.nan)
+    
+    # norm_dist = np.nanmin(min_dists) # not consistent based on pose
+    norm_dist = 0.05 # need to find a way to keep this consistent and also adjust for different body sizes
+    # print(norm_dist)
+
+    num_t_points = len(t_points_2D)
+    num_nt_points = len(all_body_points)-num_t_points
+    weight_factor = num_nt_points/num_t_points
+    # normalized_dist = np.array(min_dists)
+    normalized_dist = np.array(min_dists)/(norm_dist*weight_factor)
+    # print(np.array(min_dists).shape)
+    # normalized_dist = abs((np.array(min_dists)-norm_dist)/norm_dist)
+    # normalized_dist = ((np.array(min_dists)-norm_dist)/norm_dist)**2
+    
+    return np.insert(covered_status, 2, normalized_dist, axis=1)
+
 
 #%%
 def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
@@ -202,10 +239,11 @@ def get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D):
         is_initially_covered = initially_covered_status[i][1]
         if is_target == 1 and not is_covered: # target uncovered reward
             target_uncovered_reward += 1
-        elif is_target == -1 and is_covered: # head covered penalty
-            head_covered_penalty = 1
+        elif is_target == -1 and is_covered and not is_initially_covered: # head covered penalty
+            head_covered_penalty += 1
         elif is_target == 0 and not is_covered and is_initially_covered:
-            nontarget_uncovered_penalty += 1
+            nontarget_uncovered_penalty += covered_status[i][2]
+            # nontarget_uncovered_penalty += 1
     # print(target_uncovered_reward, nontarget_uncovered_penalty, head_covered_penalty)
     num_target = np.count_nonzero(all_body_points[:,2] == 1)
     num_head = np.count_nonzero(all_body_points[:,2] == -1)
@@ -245,16 +283,19 @@ def check_grasp_on_cloth(action, cloth_initial, clipping_thres=0.028):
     # * if no points on the blanket are within 2.8 cm of the grasp location, clip
     is_on_cloth = (np.any(np.array(dist) < clipping_thres)) 
     return dist, is_on_cloth
+
+
+
 #%%
 # # ## TEST VISUALIZATION OF BODY POINTS
 # import matplotlib.lines as mlines
 # import time
 # t0 = time.time()
 
-# # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
-# filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10109917428862267910_pid41377.pkl'
-# filename_env = '/home/kpputhuveetil/git/vBM-GNNdev/gnn_new_data/raw/c0_24035249859464233_pid95651.pkl'
-# target_limb_code = 14
+# filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
+# # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10109917428862267910_pid41377.pkl'
+# # filename_env = '/home/kpputhuveetil/git/vBM-GNNdev/gnn_new_data/raw/c0_24035249859464233_pid95651.pkl'
+# target_limb_code = 8
 # raw_data = pickle.load(open(filename_env,'rb'))
 # human_pose = np.reshape(raw_data['observation'][0], (-1,2))
 # action = raw_data['action']
@@ -295,4 +336,3 @@ def check_grasp_on_cloth(action, cloth_initial, clipping_thres=0.028):
 # print('Time:', time.time()-t0)
 
 
-# %%
