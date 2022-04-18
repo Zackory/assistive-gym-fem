@@ -1,5 +1,6 @@
 import numpy as np
 import pybullet as p
+import os, pickle, time
 from .agent import Agent
 
 body_joints = [0, 1, 2, 3, 4, 5, 6, 7, 8]
@@ -231,4 +232,56 @@ class Human(Agent):
         elif result == 0 and self.arm_previous_valid_pose[right] is not None:
             # The person is in an invalid pose. Move joint angles back to the most recent valid pose.
             self.set_joint_angles(indices, self.arm_previous_valid_pose[right])
-
+    
+    def apply_slp_joints(self,np_random):
+        #Need to edit to lead to your own 'fits' folder
+        fits_path="/home/sashawald/Desktop/bodies-uncovered/fits"
+        #Pick random person/pose
+        person = np_random.randint(1,103)
+        fit = np_random.randint(1,46)
+        path = os.path.join(fits_path,("p{:03d}".format(person)),"s{:02d}.pkl".format(fit))
+        print("Using fit: "+fits_path)
+        pkl_fit = pickle.load(open(path, 'rb'))
+        gt_joints=np.reshape(pkl_fit['body_pose'],(23,3))
+        joints_positions = [(40,np.rad2deg(gt_joints[0][0])),
+                            (41,np.rad2deg(gt_joints[0][1] * -1)),
+                            (42,np.rad2deg(gt_joints[0][2])),
+                            (33,np.rad2deg(gt_joints[1][0])),
+                            (34,np.rad2deg(gt_joints[1][1] * -1)),
+                            (35,np.rad2deg(gt_joints[1][2])),
+                            (43,np.rad2deg(gt_joints[3][0])),
+                            (36,np.rad2deg(gt_joints[4][0])),
+                            (44,np.rad2deg(gt_joints[6][0])),
+                            (45,np.rad2deg(gt_joints[6][1] * -1)),
+                            (46,np.rad2deg(gt_joints[6][2])),
+                            (37,np.rad2deg(gt_joints[7][0])),
+                            (38,np.rad2deg(gt_joints[7][1] * -1)),
+                            (39,np.rad2deg(gt_joints[7][2])),
+                            (22,np.rad2deg(gt_joints[15][0])),
+                            (23,np.rad2deg(gt_joints[15][1] * 1)),
+                            (24,np.rad2deg(gt_joints[15][2])),
+                            (12,np.rad2deg(gt_joints[16][0])),
+                            (13,np.rad2deg(gt_joints[16][1] * -1)),
+                            (14,np.rad2deg(gt_joints[16][2])),
+                            (25,np.rad2deg(gt_joints[17][1] * 1)),
+                            (15,np.rad2deg(gt_joints[18][1] * -1))
+                        ]
+        self.setup_joints(joints_positions, use_static_joints=False, reactive_force=None)
+        if fit in range(1,16):
+            orient=0
+        elif fit in range(16,31):
+            orient=np.pi/2
+        else:
+            orient=-np.pi/2
+        self.set_base_pos_orient([0, -0.2, 1.2], [-np.pi/2.0, orient, np.pi])
+        self.set_joint_stiffness(36,7)
+        self.set_joint_stiffness(43,7)
+        self.set_joint_stiffness(25,1)
+        self.set_joint_stiffness(15,1)
+        self.set_joint_stiffness(2,5)
+        self.set_joint_stiffness(5,5)
+        self.set_joint_stiffness(8,1)
+        self.set_joint_stiffness(11,1)
+        self.set_joint_stiffness(13,1)
+        self.set_joint_stiffness(23,1)
+        return

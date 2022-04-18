@@ -307,12 +307,14 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
         
-        # * Setup human in the air, with legs and arms slightly seperated
-        joints_positions = [(self.human.j_left_hip_y, -10), (self.human.j_right_hip_y, 10), (self.human.j_left_shoulder_x, -20), (self.human.j_right_shoulder_x, 20)]
-        self.human.setup_joints(joints_positions, use_static_joints=False, reactive_force=None)
-        self.human.set_base_pos_orient([0, -0.2, 1.1], [-np.pi/2.0, 0, np.pi])
-
-        if not self.fixed_pose:
+        self.fixed_pose=True
+        if self.fixed_pose:
+            self.human.apply_slp_joints(self.np_random)
+        else:
+            # * Setup human in the air, with legs and arms slightly seperated
+            joints_positions = [(self.human.j_left_hip_y, -10), (self.human.j_right_hip_y, 10), (self.human.j_left_shoulder_x, -20), (self.human.j_right_shoulder_x, 20)]
+            self.human.setup_joints(joints_positions, use_static_joints=False, reactive_force=None)
+            self.human.set_base_pos_orient([0, -0.2, 1.1], [-np.pi/2.0, 0, np.pi])
             # * Add small variation to the body pose
             motor_indices, motor_positions, motor_velocities, motor_torques = self.human.get_motor_joint_states()
             # print(motor_positions)
