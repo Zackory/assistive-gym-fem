@@ -32,7 +32,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.blanket_pose_var = False
         self.high_pose_var = False
         self.naive = False
-        self.clip = True
+        self.clip = False #! Turn off for cma-data collect
 
         self.human_no_occlusion_RGB = None
         self.human_no_occlusion_depth = None
