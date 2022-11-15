@@ -3,7 +3,7 @@ import numpy as np
 import pybullet as p
 
 import cv2
-from .bu_gnn_util import sub_sample_point_clouds, get_body_points_from_obs, get_body_points_reward, all_possible_target_limbs, randomize_target_limbs, scale_action, check_grasp_on_cloth
+from .bu_gnn_util import *
 
 from .env import AssistiveEnv
 from .agents.human_mesh import HumanMesh
@@ -28,11 +28,19 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.rendering = False
         self.target_limb_code = 14 if not self.single_ppo_model else None # randomize in reset function, None acts as a placeholder
         self.fixed_pose = False
-        self.collect_data = False
-        self.blanket_pose_var = False
-        self.high_pose_var = False
+        # self.collect_data = False
+        # self.blanket_pose_var = False
+        # self.high_pose_var = False
+        # self.body_shape_var = False
+        self.collect_data = None
+        self.blanket_pose_var = None
+        self.high_pose_var = None
+        self.body_shape_var = None
         self.naive = False
         self.clip = True #! Turn off for cma-data collect
+
+        # self.body_shape = None if self.body_shape_var == True else np.zeros((1, 10))
+        # self.gender = 'random' if self.body_shape_var == True else 'female'
 
         self.human_no_occlusion_RGB = None
         self.human_no_occlusion_depth = None
@@ -42,6 +50,18 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
     def set_target_limb_code(self, code):
         self.target_limb_code = code
+    
+    def set_env_variations(self, collect_data, blanket_pose_var, high_pose_var, body_shape_var):
+        self.collect_data = collect_data
+        self.blanket_pose_var = blanket_pose_var
+        self.high_pose_var = high_pose_var
+        self.body_shape_var = body_shape_var
+
+        self.body_shape = None if self.body_shape_var == True else np.zeros((1, 10))
+        self.gender = 'random' if self.body_shape_var == True else 'female'
+
+    def get_human_body_info(self):
+        return self.human_creation.body_info if self.body_shape_var else None
 
     def get_naive_action(self, obs, target_limb_code, data):
         target_limb_code = 2
@@ -127,6 +147,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
         
     def step(self, action):
+        self.execute_action = True
         obs = self._get_obs()
         # return obs, 0, True, {}
         # return obs, -((action[0] - 3) ** 2 + (10 * (action[1] + 2)) ** 2 + (10 * (action[2] + 2)) ** 2 + (10 * (action[3] - 3)) ** 2), 1, {}
@@ -161,61 +182,64 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             if self.collect_data:
                 return obs, 0, False, {} # for data collect
             elif self.clip:
-                return obs, 0, True, {}
+                self.execute_action = False
+                # return obs, 0, True, {"cloth_initial": data_i, "target_limb_code":self.target_limb_code}
 
         if self.collect_data:
-            filename = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'point_cloud_data.pkl')
-            point_cloud_params = pickle.load(open(filename,'rb'))
-            self.point_cloud_depth_img = self.get_depth_image_for_point_cloud(
-                point_cloud_params['imgW'], point_cloud_params['imgH'], point_cloud_params['viewMat'], point_cloud_params['projMat'])
+            pass
+            # filename = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'point_cloud_data.pkl')
+            # point_cloud_params = pickle.load(open(filename,'rb'))
+            # self.point_cloud_depth_img = self.get_depth_image_for_point_cloud(
+            #     point_cloud_params['imgW'], point_cloud_params['imgH'], point_cloud_params['viewMat'], point_cloud_params['projMat'])
 
-        anchor_idx = np.argpartition(np.array(dist), 4)[:4]
-        # for a in anchor_idx:
-            # print("anchor loc: ", data[1][a])
+        if self.execute_action:
+            anchor_idx = np.argpartition(np.array(dist), 4)[:4]
+            # for a in anchor_idx:
+                # print("anchor loc: ", data[1][a])
 
-        # * update grasp_loc var with the location of the central anchor point on the cloth
-        grasp_loc = np.array(data_i[1][anchor_idx[0]][0:2])
+            # * update grasp_loc var with the location of the central anchor point on the cloth
+            grasp_loc = np.array(data_i[1][anchor_idx[0]][0:2])
 
-        # * move sphere down to the anchor point on the blanket, create anchor point (central point first, then remaining points) and store constraint ids
-        self.sphere_ee.set_base_pos_orient(data_i[1][anchor_idx[0]], np.array([0,0,0]))
-        constraint_ids = []
-        constraint_ids.append(p.createSoftBodyAnchor(self.blanket, anchor_idx[0], self.sphere_ee.body, -1, [0, 0, 0]))
-        for i in anchor_idx[1:]:
-            pos_diff = np.array(data_i[1][i]) - np.array(data_i[1][anchor_idx[0]])
-            constraint_ids.append(p.createSoftBodyAnchor(self.blanket, i, self.sphere_ee.body, -1, pos_diff))
-        
-        # * move sphere up by some delta z
-        current_pos = self.sphere_ee.get_base_pos_orient()[0]
-        delta_z = 0.4                           # distance to move up (with respect to the top of the bed)
-        bed_height = 0.58                       # height of the bed
-        final_z = delta_z + bed_height          # global goal z position
-        while current_pos[2] <= final_z:
-            self.sphere_ee.set_base_pos_orient(current_pos + np.array([0, 0, 0.005]), np.array([0,0,0]))
-            p.stepSimulation(physicsClientId=self.id)
+            # * move sphere down to the anchor point on the blanket, create anchor point (central point first, then remaining points) and store constraint ids
+            self.sphere_ee.set_base_pos_orient(data_i[1][anchor_idx[0]], np.array([0,0,0]))
+            constraint_ids = []
+            constraint_ids.append(p.createSoftBodyAnchor(self.blanket, anchor_idx[0], self.sphere_ee.body, -1, [0, 0, 0]))
+            for i in anchor_idx[1:]:
+                pos_diff = np.array(data_i[1][i]) - np.array(data_i[1][anchor_idx[0]])
+                constraint_ids.append(p.createSoftBodyAnchor(self.blanket, i, self.sphere_ee.body, -1, pos_diff))
+            
+            # * move sphere up by some delta z
             current_pos = self.sphere_ee.get_base_pos_orient()[0]
+            delta_z = 0.4                           # distance to move up (with respect to the top of the bed)
+            bed_height = 0.58                       # height of the bed
+            final_z = delta_z + bed_height          # global goal z position
+            while current_pos[2] <= final_z:
+                self.sphere_ee.set_base_pos_orient(current_pos + np.array([0, 0, 0.005]), np.array([0,0,0]))
+                p.stepSimulation(physicsClientId=self.id)
+                current_pos = self.sphere_ee.get_base_pos_orient()[0]
 
-        # * move sphere to the release location, release the blanket
-        travel_dist = release_loc - grasp_loc
+            # * move sphere to the release location, release the blanket
+            travel_dist = release_loc - grasp_loc
 
-        # * determine delta x and y, make sure it is, at max, close to 0.005
-        num_steps = np.abs(travel_dist//0.005).max()
-        delta_x, delta_y = travel_dist/num_steps
+            # * determine delta x and y, make sure it is, at max, close to 0.005
+            num_steps = np.abs(travel_dist//0.005).max()
+            delta_x, delta_y = travel_dist/num_steps
 
-        current_pos = self.sphere_ee.get_base_pos_orient()[0]
-        for _ in range(int(num_steps)):
-            self.sphere_ee.set_base_pos_orient(current_pos + np.array([delta_x, delta_y, 0]), np.array([0,0,0]))
-            p.stepSimulation(physicsClientId=self.id)
             current_pos = self.sphere_ee.get_base_pos_orient()[0]
+            for _ in range(int(num_steps)):
+                self.sphere_ee.set_base_pos_orient(current_pos + np.array([delta_x, delta_y, 0]), np.array([0,0,0]))
+                p.stepSimulation(physicsClientId=self.id)
+                current_pos = self.sphere_ee.get_base_pos_orient()[0]
 
-        # * continue stepping simulation to allow the cloth to settle before release
-        for _ in range(20):
-            p.stepSimulation(physicsClientId=self.id)
+            # * continue stepping simulation to allow the cloth to settle before release
+            for _ in range(20):
+                p.stepSimulation(physicsClientId=self.id)
 
-        # * release the cloth at the release point, sphere is at the same arbitrary z position in the air
-        for i in constraint_ids:
-            p.removeConstraint(i, physicsClientId=self.id)
-        for _ in range(50):
-            p.stepSimulation(physicsClientId=self.id)
+            # * release the cloth at the release point, sphere is at the same arbitrary z position in the air
+            for i in constraint_ids:
+                p.removeConstraint(i, physicsClientId=self.id)
+            for _ in range(50):
+                p.stepSimulation(physicsClientId=self.id)
 
         # * get points on the blanket, final state of the cloth
         data_f = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
@@ -225,15 +249,13 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         info = {}
         if not self.collect_data:
             #! REPLACE REWARD CALCULATION HERE WTIH FUNCTION FROM GNN_UTIL
-            reward_distance_btw_grasp_release = -150 if np.linalg.norm(grasp_loc - release_loc) >= 1.5 else 0
             cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(data_i[1], data_f[1])
             cloth_initial_2D = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
             cloth_final_2D = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
             human_pose = np.reshape(self.human_pose, (-1,2))
             # print(human_pose)
             all_body_points = get_body_points_from_obs(human_pose, target_limb_code=self.target_limb_code)
-            body_point_reward, covered_status = get_body_points_reward(all_body_points, cloth_initial_2D, cloth_final_2D)
-            reward = body_point_reward + reward_distance_btw_grasp_release
+            reward, covered_status = get_reward(action, all_body_points, cloth_initial_2D, cloth_final_2D)
 
             info = {
                 "cloth_initial": data_i,
@@ -243,7 +265,10 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
                 "cloth_initial_subsample": cloth_initial_subsample,
                 "cloth_final_subsample": cloth_final_subsample,
                 "covered_status_sim": covered_status,
-                "target_limb_code":self.target_limb_code
+                "target_limb_code":self.target_limb_code,
+                "human_body_info": self.human_creation.body_info if self.body_shape_var else None,
+                "gender":self.human.gender,
+                "grasp_on_cloth":self.execute_action
                 }
         else:
             info = {
@@ -251,7 +276,9 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
                 "cloth_final": data_f,
                 "RGB_human": self.human_no_occlusion_RGB,
                 "depth_human": self.human_no_occlusion_depth,
-                "point_cloud_depth_img": self.point_cloud_depth_img
+                "point_cloud_depth_img": self.point_cloud_depth_img,
+                "human_body_info": self.human_creation.body_info if self.body_shape_var else None,
+                "gender":self.human.gender
                 }
         self.iteration += 1
         done = self.iteration >= 1
@@ -295,7 +322,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
     def reset(self):
 
         super(BodiesUncoveredGNNEnv, self).reset()
-        self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=np.zeros((1, 10)))
+        self.build_assistive_env(fixed_human_base=False, gender=self.gender, human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
+        # self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
 
         self.target_limb_code = self.target_limb_code if not self.single_ppo_model else randomize_target_limbs()
 
