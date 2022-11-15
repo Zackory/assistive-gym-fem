@@ -12,6 +12,11 @@ def gnn_data_collect(env_name, i):
     coop = 'Human' in env_name
     seed = seeding.create_seed()
     env = make_env(env_name, coop=coop, seed=seed)
+    env.set_env_variations(
+        collect_data = True,
+        blanket_pose_var = False,
+        high_pose_var = False,
+        body_shape_var = False)
 
     done = False
     # env.render()
@@ -45,7 +50,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     current_dir = os.getcwd()
-    pkl_loc = os.path.join(current_dir,'gnn_blanket_var_data/akhil')
+    variation_type = 'body_shape_var'
+    pkl_loc = os.path.join(current_dir, variation_type, 'raw')
     pathlib.Path(pkl_loc).mkdir(parents=True, exist_ok=True)
 
     # ! TODO: temporary to prevent messy prints, go back and fix where warning is coming from
@@ -58,7 +64,7 @@ if __name__ == "__main__":
     num_processes = 100
 
     # num data points to collect
-    trials = 20000
+    trials = 60000
 
     # trials = 1
     # num_processes = 1
