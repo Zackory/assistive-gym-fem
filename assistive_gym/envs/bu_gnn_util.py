@@ -1,11 +1,14 @@
 #%%
-import pickle, os
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+import pickle
+
 import matplotlib.lines as mlines
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
 
 #%%
-body_info = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'body_info.pkl'),'rb'))
+DEFAULT_body_info = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'body_info.pkl'),'rb'))
 
 
 limb_config = {
@@ -54,13 +57,23 @@ all_possible_target_limbs = [
                 [obs_limbs_list[9]], obs_limbs_list[9:11], obs_limbs_list[9:12],
                 [39, 36, 46, 43], [18, 16, 14, 28, 26, 24, 2, 8], [39, 36, 46, 43, 35, 42],
                 [18, 16, 14, 39, 36, 35, 28, 26, 24, 46, 43, 42, 8]]
+target_limb_subset = [2, 4, 5, 8, 10, 11, 12, 13, 14, 15]
+# all_possible_target_limbs = [all_possible_target_limbs[i] for i in [2, 4, 5, 8, 10, 11, 12, 13, 14, 15]]
+# all_possible_target_limbs
 
 
 
 #%%
 def get_rectangular_limb_points(point1, point2, capsule_radius=None, length_points=0, width_points=0):
     axis_vector = point1-point2
-    theta = np.arctan(axis_vector[0]/axis_vector[1])
+
+    quadrant_adjustment = 0
+    if axis_vector[1] < 0 and axis_vector[0] >= 0:
+        quadrant_adjustment = np.pi
+    elif axis_vector[1] < 0 and axis_vector[0] < 0:
+        quadrant_adjustment = -np.pi
+
+    theta = np.arctan(axis_vector[0]/axis_vector[1]) + quadrant_adjustment
 
     length = np.linalg.norm(point1 - point2)
     x = np.linspace(-capsule_radius, capsule_radius, width_points)
@@ -110,12 +123,14 @@ def get_torso_points(human_pose, radius_upperchest, radius_waist, num_rings):
     return np.concatenate((chest_points, waist_points))
 
 
-def get_body_points_from_obs(human_pose, target_limb_code):
+def get_body_points_from_obs(human_pose, target_limb_code, body_info = None):
     # global obs_limbs, limb_config, all_possible_target_limbs
 
     # TESTING ONLY: Move the human around so blanket covers different limbs
     # for i in range(len(human_pose)):
     #     human_pose[i, 1] += 0.15
+    if body_info is None:
+        body_info = DEFAULT_body_info
 
     target_points = []
     nontarget_points = []
@@ -177,11 +192,13 @@ def sub_sample_point_clouds(cloth_initial_3D_pos, cloth_final_3D_pos, voxel_size
 #%%
 # improved performance by using numpy operations instead of looping over the points in the array
 def get_covered_status(all_body_points, cloth_state_2D):
+
+        covered_threshold = 0.05
         covered_status = []
 
         for body_point in all_body_points:
             is_covered = False
-            if np.any(np.linalg.norm(cloth_state_2D - body_point[0:2], axis=1) <= 0.05):
+            if np.any(np.linalg.norm(cloth_state_2D - body_point[0:2], axis=1) <= covered_threshold):
                 is_covered = True
             is_target = body_point[2] # 1 = target, 0 = nontarget, -1 = head
             covered_status.append([is_target, is_covered]) 
@@ -208,7 +225,7 @@ def get_closest_t_to_nt_points(all_body_points, covered_status):
             min_dists.append(np.nan)
     
     # norm_dist = np.nanmin(min_dists) # not consistent based on pose
-    norm_dist = 0.05 # need to find a way to keep this consistent and also adjust for different body sizes
+    norm_dist = 0.05 #! need to find a way to keep this consistent and also adjust for different body sizes
     # print(norm_dist)
 
     num_t_points = len(t_points_2D)
@@ -269,7 +286,8 @@ def get_reward(action, all_body_points, cloth_initial_2D, cloth_final_2D):
 
 #%%
 def randomize_target_limbs():
-    target_limb_code = np.random.default_rng().integers(len(all_possible_target_limbs))
+    # target_limb_code = np.random.randint(len(all_possible_target_limbs))
+    target_limb_code = np.random.choice(target_limb_subset)
     return target_limb_code
 
 def scale_action(action, scale=[0.44, 1.05]):
@@ -284,26 +302,52 @@ def check_grasp_on_cloth(action, cloth_initial, clipping_thres=0.028):
     is_on_cloth = (np.any(np.array(dist) < clipping_thres)) 
     return dist, is_on_cloth
 
-
-
 #%%
+def get_edge_connectivity(cloth_initial, edge_threshold, cloth_dim):
+    """
+    returns an array of edge indexes, returned as a list of index tuples
+    Data requires indexes to be in COO format so will need to convert via performing transpose (.t()) and calling contiguous (.contiguous())
+    """
+    cloth_initial = np.array(cloth_initial)
+    if cloth_dim == 2:
+        cloth_initial = np.delete(cloth_initial, 2, axis = 1)
+    threshold = edge_threshold
+    edge_inds = []
+    for p1_ind, point_1 in enumerate(cloth_initial):
+        for p2_ind, point_2 in enumerate(cloth_initial): # want duplicate edges to capture both directions of info sharing
+            if p1_ind != p2_ind and np.linalg.norm(point_1 - point_2) <= threshold: # don't consider distance between a point and itself, see if distance is within
+                edge_inds.append([p1_ind, p2_ind])
+            np.linalg.norm(point_1 - point_2) <= threshold
+    # return torch.tensor([0,2], dtype = torch.long)
+    return torch.tensor(edge_inds, dtype = torch.long)
+
+
+# #%%
 # # ## TEST VISUALIZATION OF BODY POINTS
 # import matplotlib.lines as mlines
 # import time
 # t0 = time.time()
 
-# filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
+# # filename_env = '/home/kpputhuveetil/git/vBM-GNNdev/cmaes_eval_500_new_rew/tl0_c23_13938182822138537765_pid14359.pkl'
+# # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10519595811781955081_pid5411.pkl'
 # # filename_env = '/home/kpputhuveetil/git/vBM-GNNs/c0_10109917428862267910_pid41377.pkl'
-# # filename_env = '/home/kpputhuveetil/git/vBM-GNNdev/gnn_new_data/raw/c0_24035249859464233_pid95651.pkl'
-# target_limb_code = 8
+# filename_env = '/home/kpputhuveetil/git/vBM-GNNdev/gnn_new_data/raw/c0_24035249859464233_pid95651.pkl'
+# target_limb_code = 4
 # raw_data = pickle.load(open(filename_env,'rb'))
 # human_pose = np.reshape(raw_data['observation'][0], (-1,2))
 # action = raw_data['action']
+
+# # human_pose = raw_data['human_pose']
+
+
 # all_body_points = get_body_points_from_obs(human_pose, target_limb_code=target_limb_code)
 
+
 # cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(raw_data['info']['cloth_initial'][1], raw_data['info']['cloth_final'][1])
+# # cloth_initial_subsample, cloth_final_subsample = sub_sample_point_clouds(raw_data['sim_info']['info']['cloth_initial'][1], raw_data['sim_info']['info']['cloth_final'][1])
 # cloth_initial = np.delete(np.array(cloth_initial_subsample), 2, axis = 1)
 # cloth_final = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
+# # cloth_final = raw_data['cma_info']['best_pred']
 
 # reward, covered_status = get_body_points_reward(all_body_points, cloth_initial, cloth_final)
 
@@ -331,8 +375,10 @@ def check_grasp_on_cloth(action, cloth_initial, clipping_thres=0.028):
 # plt.scatter(cloth_final[:,0], cloth_final[:,1], alpha=0.2)
 # plt.axis([-0.7, 0.7, -1.0, 0.9])
 # # plt.legend(loc='lower left', prop={'size': 9}, handles=[ntarg, targ, obs])
-# plt.gca().invert_yaxis()
+# # plt.gca().invert_yaxis()
 # plt.show()
 # print('Time:', time.time()-t0)
 
 
+
+# # %%
