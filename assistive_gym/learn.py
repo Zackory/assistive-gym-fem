@@ -7,12 +7,15 @@ from ray.tune.logger import pretty_print
 from numpngw import write_apng
 import pathlib, pickle,time
 import keras
+from .envs.bu_gnn_util import *
+import tqdm
 
 
 
-def setup_config(env, algo, coop=False, seed=0, extra_configs={}):
-    num_processes = multiprocessing.cpu_count()
-    num_processes = 100 if num_processes > 100 else num_processes # reduce batch size to prevent memory issues
+def setup_config(env, algo, coop=False, seed=0, extra_configs={}, num_processes=None):
+    if num_processes is None:
+        num_processes = multiprocessing.cpu_count()
+        num_processes = 100 if num_processes > 100 else num_processes # reduce batch size to prevent memory issues
     if algo == 'ppo':
         config = ppo.DEFAULT_CONFIG.copy()
         config['train_batch_size'] = num_processes
@@ -110,6 +113,7 @@ def train(env_name, algo, timesteps_total=1000000, save_dir='./trained_models/',
     ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
     env = make_env(env_name, coop)
     agent, checkpoint_path = load_policy(env, algo, env_name, load_policy_path, coop, seed, extra_configs)
+
     env.disconnect()
 
     timesteps = 0
@@ -170,33 +174,50 @@ def render_policy(env, env_name, algo, policy_path, coop=False, colab=False, see
 
 #! has been significantly modified for evaluting bm policies
 def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, seed=0, verbose=False, extra_configs={}):
+    target_limb_code = None
+    eval_conditions = 'standard'
+    env = make_env(env_name, coop, seed=seed)
+
     if algo == 'cmaes':
         print('CMA-ES EVALUATION', policy_path)
-        env = make_env(env_name, coop, seed=seed)
         model = keras.models.load_model(policy_path)
     else:
-        ray.init(num_cpus=multiprocessing.cpu_count(), ignore_reinit_error=True, log_to_driver=False)
-        env = make_env(env_name, coop, seed=seed)
-        test_agent, _ = load_policy(env, algo, env_name, policy_path, coop, seed, extra_configs)
+        ray.init(num_cpus=multiprocessing.cpu_count()-28, ignore_reinit_error=True, log_to_driver=False)
+
+        agents = []
+        for i in range(16):
+            if i in [2, 4, 5, 8, 10, 11, 12, 13, 14, 15]:
+            # if i == 13:
+                policy_path = f'./trained_models/FINAL_MODELS/PPO_TL{i}'
+                agent, _ = load_policy(env, algo, env_name, policy_path, coop, seed, extra_configs, num_processes=4)
+                agents.append(agent)
+            else:
+                agents.append([])
+
+        print(agents)
 
     current_dir = os.getcwd()
     pkl_loc = os.path.join(current_dir,'bm_eval')
     pathlib.Path(pkl_loc).mkdir(parents=True, exist_ok=True)
-    filename = f"evalData_{policy_path.split('/')[-1]}"
+    filename = f"evalData_{eval_conditions}_{round(time.time())}"
     f = open(os.path.join(pkl_loc, filename +".pkl"),"wb")
     eval_t0 = time.time()
 
     rewards = []
 
-    for episode in range(n_episodes):
+    for episode in tqdm(range(n_episodes)):
 
         t0 = time.time()
+        target_limb_code = randomize_target_limbs()
+        # print(target_limb_code)
+        env.set_target_limb_code(target_limb_code)
         obs = env.reset()
 
         if algo == 'cmaes':
             obs = np.reshape(obs, (-1, 12))
             action = model.predict(obs)[0]
         else:
+            test_agent = agents[target_limb_code]
             action = test_agent.compute_action(obs)
 
         obs, reward, done, info = env.step(action)
@@ -219,7 +240,7 @@ def evaluate_policy(env_name, algo, policy_path, n_episodes=100, coop=False, see
             "info":info}, f)
 
         if verbose:
-            print(f"Episode {episode+1} | Reward total: {reward}")
+            print(f"Episode {episode+1} | TL:{env.target_limb_code}, Reward total: {reward}")
         sys.stdout.flush()
 
     env.disconnect()
