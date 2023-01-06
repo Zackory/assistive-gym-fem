@@ -1,15 +1,17 @@
-import os, time, pickle
+import os
+import pickle
+import time
+
+import cv2
 import numpy as np
 import pybullet as p
 
-import cv2
-from .bu_gnn_util import *
-
-from .env import AssistiveEnv
-from .agents.human_mesh import HumanMesh
-
 # since there is no gnn_testing_envs file
 from .agents.human import Human
+from .agents.human_mesh import HumanMesh
+from .bu_gnn_util import *
+from .env import AssistiveEnv
+
 human_controllable_joint_indices = []
 
 #! max_episode_steps=200 CHECK THAT THIS IS STILL OKAY MOVING FORWARD
@@ -32,10 +34,10 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         # self.blanket_pose_var = False
         # self.high_pose_var = False
         # self.body_shape_var = False
-        self.collect_data = None
-        self.blanket_pose_var = None
-        self.high_pose_var = None
-        self.body_shape_var = None
+        # self.collect_data = None
+        # self.blanket_pose_var = None
+        # self.high_pose_var = None
+        # self.body_shape_var = None
         self.naive = False
         self.clip = True #! Turn off for cma-data collect
 
@@ -254,7 +256,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
             cloth_final_2D = np.delete(np.array(cloth_final_subsample), 2, axis = 1)
             human_pose = np.reshape(self.human_pose, (-1,2))
             # print(human_pose)
-            all_body_points = get_body_points_from_obs(human_pose, target_limb_code=self.target_limb_code)
+            all_body_points = get_body_points_from_obs(human_pose, target_limb_code=self.target_limb_code, body_info=self.get_human_body_info())
             reward, covered_status = get_reward(action, all_body_points, cloth_initial_2D, cloth_final_2D)
 
             info = {
