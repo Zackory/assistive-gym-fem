@@ -8,7 +8,7 @@ from numpngw import write_apng
 import pathlib, pickle,time
 import keras
 from .envs.bu_gnn_util import *
-import tqdm
+from tqdm import tqdm
 
 
 
@@ -71,9 +71,9 @@ def setup_config(env, algo, coop=False, seed=0, extra_configs={}, num_processes=
         config['env_config'] = {'num_agents': 2}
     return {**config, **extra_configs}
 
-def load_policy(env, algo, env_name, policy_path=None, coop=False, seed=0, extra_configs={}):
+def load_policy(env, algo, env_name, policy_path=None, coop=False, seed=0, extra_configs={}, num_processes = None):
     if algo == 'ppo':
-        agent = ppo.PPOTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
+        agent = ppo.PPOTrainer(setup_config(env, algo, coop, seed, extra_configs, num_processes), 'assistive_gym:'+env_name)
     elif algo == 'sac':
         agent = sac.SACTrainer(setup_config(env, algo, coop, seed, extra_configs), 'assistive_gym:'+env_name)
     elif algo == 'ddpg':
