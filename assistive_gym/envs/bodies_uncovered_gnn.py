@@ -34,10 +34,10 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         # self.blanket_pose_var = False
         # self.high_pose_var = False
         # self.body_shape_var = False
-        # self.collect_data = None
-        # self.blanket_pose_var = None
-        # self.high_pose_var = None
-        # self.body_shape_var = None
+        self.collect_data = None
+        self.blanket_pose_var = None
+        self.high_pose_var = None
+        self.body_shape_var = None
         self.naive = False
         self.clip = True #! Turn off for cma-data collect
 
@@ -49,6 +49,15 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         self.point_cloud_initial = None
         self.point_cloud_final = None
         self.point_cloud_depth_img = None
+
+
+        self.seed_val = 100
+        self.cma_sim_dyn = True
+    
+    def set_seed_val(self, seed = 1001):
+        # if seed != self.seed_val:
+        #     self.seed_val = seed
+        self.seed_val = seed
 
     def set_target_limb_code(self, code):
         self.target_limb_code = code
@@ -322,6 +331,8 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         return np.float32(pose)
 
     def reset(self):
+        if self.cma_sim_dyn:
+            self.seed(self.seed_val)
 
         super(BodiesUncoveredGNNEnv, self).reset()
         self.build_assistive_env(fixed_human_base=False, gender=self.gender, human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
