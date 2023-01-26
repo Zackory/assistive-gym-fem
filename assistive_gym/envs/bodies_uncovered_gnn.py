@@ -52,7 +52,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
 
         self.seed_val = 100
-        self.cma_sim_dyn = True
+        self.cma_sim_dyn = False
     
     def set_seed_val(self, seed = 1001):
         # if seed != self.seed_val:
@@ -75,86 +75,92 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
         return self.human_creation.body_info if self.body_shape_var else None
 
     def get_naive_action(self, obs, target_limb_code, data):
-        target_limb_code = 2
+         # target_limb_code = 8
         human_pose = np.reshape(obs, (-1,2))
         all_limb_endpoints = [
-            [0], [0,1], [0,2],
-            [3], [3,4], [3,5],
-            [6], [6,7], [6,8],
-            [9], [9,10], [9,11],
-            [None], [None], [None],
-            [None]
+            [0,1], [0,1], [0,2],
+            [3,4], [3,4], [3,5],
+            [6,7], [6,7], [6,8],
+            [9,10], [9,10], [9,11],
+            [3,9,4,10], [2,8,5,11], [3,9,5,11],
+            [2,8,3,9]
         ]
         limb_endpoints = all_limb_endpoints[target_limb_code]
+
         if len(limb_endpoints) == 2:
             p1 = human_pose[limb_endpoints[0]]
             p2 = human_pose[limb_endpoints[1]]
-            midpoint = (p1 + p2)/2 # grasp location
-            print(p1, p2, midpoint)
+        elif len(limb_endpoints) == 4:
+            p1 = (human_pose[limb_endpoints[0]] + human_pose[limb_endpoints[1]])/2
+            p2 = (human_pose[limb_endpoints[2]] + human_pose[limb_endpoints[3]])/2
+        
+        midpoint = (p1 + p2)/2 if target_limb_code not in [0,3,6,9] else human_pose[limb_endpoints[0]]
+        # print(p1, p2, midpoint)
 
-            # coeff = np.polyfit([p1[1], p2[1]], [p1[0], p2[0]], 1)
-            # line = np.poly1d(coeff)
+        dists = []
+        points = []
 
-            # axis_vector = p2-p1
-            # unit_axis_vector = axis_vector/np.linalg.norm(axis_vector)
-            dists = []
-            points = []
-            for i, p3 in enumerate(data[1]):
-                axis_vector = p1-p2
-                if target_limb_code in [3,4,5,9,10,11]: 
-                    vector = axis_vector
-                else:
-                    direction = [-1, 1] if target_limb_code in [6,7,8] else [1, -1]
-                    vector = np.array([axis_vector[1], axis_vector[0]])*np.array(direction)
+        axis_vector = p1-p2
+        if target_limb_code in [3,4,5,9,10,11,12,13,14,15]:      # grasp is colinear with axis vector
+            trajectory_vector = axis_vector
+        else:                                                    # grasp is normal to axis vector, for hands, forearms, arms only
+            direction = [-1, 1] if target_limb_code in [6,7,8] else [1, -1]
+            trajectory_vector = np.array([axis_vector[1], axis_vector[0]])*np.array(direction)
+
+        if target_limb_code == 15: # to uncover the whole body, pull the blanket to the foot of the bed
+            r_y = 1.05
+            r_x = r_y*trajectory_vector[0]/trajectory_vector[1]
+            release = [r_x, r_y]
+        else:
+            for i, p3 in enumerate(data):
                 cloth_vector = p3[0:2]-midpoint
                 # cloth_vector = midpoint-p3[0:2] if target_limb_code in [3,4,5,9,10,11] else p3[0:2]-midpoint
-                d = np.linalg.norm(np.cross(vector, cloth_vector))/np.linalg.norm(vector) #! may want to replace midpoint with p1 for lower limbs
 
-                vector = vector/np.linalg.norm(vector)
+                # deviation of a given point on the cloth and the trajectory direction
+                d = np.linalg.norm(np.cross(trajectory_vector, cloth_vector))/np.linalg.norm(trajectory_vector)
+
+                trajectory_vector = trajectory_vector/np.linalg.norm(trajectory_vector)
                 cloth_vector = cloth_vector/np.linalg.norm(cloth_vector)
-                theta = np.arccos(np.clip(np.dot(vector, cloth_vector), -1.0, 1.0))
-                if d < 0.01 and p3[2]>=0.58 and theta < np.pi/2:
+                theta = np.arccos(np.clip(np.dot(trajectory_vector, cloth_vector), -1.0, 1.0))
+                # if d < 0.01 and p3[2]>=0.58 and theta < np.pi/2:
+                if d < 0.015 and p3[2]>=0.58 and theta < np.pi/2:
                     # print(theta)
                     dists.append(np.linalg.norm(midpoint-p3[0:2]))
                     points.append(p3)
-
-                
-            rgb = [0, 0, 0]
-            p.addUserDebugText(text=str('edge'), textPosition=points[np.argmax(dists)], textColorRGB=rgb, textSize=1, lifeTime=0, physicsClientId=self.id)
+                    # self.create_sphere(radius=0.01, mass=0.0, pos = p3, visual=True, collision=True, rgba=[1, 0, 0, 1])
+            #! ADD CONDITION FOR IF NO CLOTH POINTS FOUND, maybe increase d thers?
+            if len(dists) == 0:
+                return None
             release = midpoint + (midpoint - points[np.argmax(dists)][0:2])
-            # p.addUserDebugText(text=str('edge'), textPosition=release, textColorRGB=[1,1,0], textSize=1, lifeTime=0, physicsClientId=self.id)
-            self.create_sphere(radius=0.01, mass=0.0, pos = list(release)+[0.9], visual=True, collision=True, rgba=[0, 1, 1, 1])
-    
+            # p.addUserDebugText(text=str('edge'), textPosition=points[np.argmax(dists)], textColorRGB=[0, 0, 0], textSize=1, lifeTime=0, physicsClientId=self.id)
 
-            self.create_sphere(radius=0.01, mass=0.0, pos = list(p1)+[0.9], visual=True, collision=True, rgba=[0, 1, 0, 1])
-            self.create_sphere(radius=0.01, mass=0.0, pos = list(p2)+[0.9], visual=True, collision=True, rgba=[1, 1, 0, 1])
-            self.create_sphere(radius=0.01, mass=0.0, pos = list(midpoint)+[0.9], visual=True, collision=True, rgba=[0, 0, 0, 1])
+        grasp = p1 if target_limb_code in [4, 5, 10, 11, 12, 13, 14, 15] else list(points[np.argmax(dists)][0:2])
 
-            #! CLIP GRASP AND RELEASE TO THE BED
-            
-        else:
-            pass
+        # constrain to the bed (sometimes limbs or cloth is slightly outside these bounds)
+        grasp[0] = np.clip(grasp[0], -0.44, 0.44)
+        grasp[1] = np.clip(grasp[1], -1.05, 1.05)
+        release[0] = np.clip(release[0], -0.44, 0.44)
+        release[1] = np.clip(release[1], -1.05, 1.05)
+
+        if self.rendering:
+            self.create_sphere(radius=0.01, mass=0.0, pos = list(release)+[0.9], visual=True, collision=False, rgba=[0, 1, 1, 1])
+            p.addUserDebugText(text=str('release'), textPosition=list(release)+[0.9+0.02], textColorRGB=[0, 0, 0], textSize=1, lifeTime=0, physicsClientId=self.id)
+            p.addUserDebugText(text=str('grasp'), textPosition=list(grasp)+[0.9+0.02], textColorRGB=[0, 0, 0], textSize=1, lifeTime=0, physicsClientId=self.id)
+
+
+            self.create_sphere(radius=0.01, mass=0.0, pos = list(p1)+[0.9], visual=True, collision=False, rgba=[1, 1, 0, 1])
+            self.create_sphere(radius=0.01, mass=0.0, pos = list(p2)+[0.9], visual=True, collision=False, rgba=[1, 1, 0, 1])
+            self.create_sphere(radius=0.01, mass=0.0, pos = list(grasp)+[0.9], visual=True, collision=False, rgba=[0, 0, 0, 1])
+
+
+        action = np.array([grasp[0], grasp[1], release[0], release[1]])
         
-        # human_pose = np.reshape(obs, (-1,2))
-        # feet_midpoint = (human_pose[3] + human_pose[9])/2
-        # knee_midpoint = (human_pose[4] + human_pose[10])/2
-        # hip_midpoint = (human_pose[5] + human_pose[11])/2
-        # btw_upperchest_head_midpoint = (human_pose[12] + human_pose[13])/2
+        #! ClIP HERE
+        action[0], action[2] = list(np.clip([action[0], action[2]], -0.44, 0.44))
+        action[1], action[3] = list(np.clip([action[1], action[3]], -1.05, 1.05))
 
-        # coeff = np.polyfit([feet_midpoint[1], knee_midpoint[1]], [feet_midpoint[0], knee_midpoint[0]], 1)
-        # line = np.poly1d(coeff)
-        # # release_y = list(btw_upperchest_head_midpoint)[1]
-        # release_y = list(human_pose[13])[1]
-        # release_x = line(release_y)
+        return action
 
-        # # self.create_sphere(radius=0.01, mass=0.0, pos = list(feet_midpoint)+[0.9], visual=True, collision=True, rgba=[0, 1, 0, 1])
-        # # self.create_sphere(radius=0.01, mass=0.0, pos = list(knee_midpoint)+[0.9], visual=True, collision=True, rgba=[1, 1, 0, 1])
-        # # self.create_sphere(radius=0.01, mass=0.0, pos = list(hip_midpoint)+[0.9], visual=True, collision=True, rgba=[0, 0, 0, 1])
-        # # self.create_sphere(radius=0.01, mass=0.0, pos = list(btw_upperchest_hip_midpoint)+[0.9], visual=True, collision=True, rgba=[0, 0, 0, 1])
-        # # self.create_sphere(radius=0.01, mass=0.0, pos = [release_x, release_y, 0.9], visual=True, collision=True, rgba=[1, 0, 0, 1])
-
-        # action = np.array(list(feet_midpoint) + [release_x] + [release_y])
-        # return action
 
         
     def step(self, action):
