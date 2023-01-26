@@ -6,6 +6,7 @@ import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import math
 
 #%%
 DEFAULT_body_info = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'body_info.pkl'),'rb'))
@@ -285,10 +286,22 @@ def get_reward(action, all_body_points, cloth_initial_2D, cloth_final_2D):
     return reward, covered_status
 
 #%%
-def randomize_target_limbs():
+def randomize_target_limbs(tl_subset=target_limb_subset):
     # target_limb_code = np.random.randint(len(all_possible_target_limbs))
-    target_limb_code = np.random.choice(target_limb_subset)
+    target_limb_code = np.random.choice(tl_subset)
     return target_limb_code
+
+# new possible method - maybe this will work better for PPO?
+# def scale_action(action, x_range=[-0.44, 0.44], y_range=[-1.05, 1.05]):
+#     scaled_action = []
+#     for i in range(len(action)):
+#         if i % 2 == 0:
+#             a = np.interp(action[i], [-1, 1], x_range)
+#         else:
+#             a = np.interp(action[i], [-1, 1], y_range)
+#         scaled_action.append(a)
+        
+#     return np.array(scaled_action)
 
 def scale_action(action, scale=[0.44, 1.05]):
     scale = scale*2
@@ -320,6 +333,32 @@ def get_edge_connectivity(cloth_initial, edge_threshold, cloth_dim):
             np.linalg.norm(point_1 - point_2) <= threshold
     # return torch.tensor([0,2], dtype = torch.long)
     return torch.tensor(edge_inds, dtype = torch.long)
+
+def get_rotation_matrix(axis, theta):
+    """
+    Find the rotation matrix associated with counterclockwise rotation
+    about the given axis by theta radians.
+    Credit: http://stackoverflow.com/users/190597/unutbu
+
+    Args:
+        axis (list): rotation axis of the form [x, y, z]
+        theta (float): rotational angle in radians
+
+    Returns:
+        array. Rotation matrix.
+    """
+
+    axis = np.asarray(axis)
+    theta = np.asarray(theta)
+    axis = axis/math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta/2.0)
+    b, c, d = -axis*math.sin(theta/2.0)
+    aa, bb, cc, dd = a*a, b*b, c*c, d*d
+    bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
+
+    return np.array([[aa+bb-cc-dd, 2*(bc+ad), 2*(bd-ac)],
+                    [2*(bc-ad), aa+cc-bb-dd, 2*(cd+ab)],
+                    [2*(bd+ac), 2*(cd-ab), aa+dd-bb-cc]])
 
 
 # #%%
