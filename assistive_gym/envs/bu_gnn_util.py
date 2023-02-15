@@ -292,16 +292,12 @@ def randomize_target_limbs(tl_subset=target_limb_subset):
     return target_limb_code
 
 # new possible method - maybe this will work better for PPO?
-# def scale_action(action, x_range=[-0.44, 0.44], y_range=[-1.05, 1.05]):
-#     scaled_action = []
-#     for i in range(len(action)):
-#         if i % 2 == 0:
-#             a = np.interp(action[i], [-1, 1], x_range)
-#         else:
-#             a = np.interp(action[i], [-1, 1], y_range)
-#         scaled_action.append(a)
-        
-#     return np.array(scaled_action)
+def remap_action_ppo(action, remap_ranges):
+    remap_action = []
+    for i in range(len(action)):
+        a = np.interp(action[i], [-1, 1], remap_ranges[i])
+        remap_action.append(a)
+    return np.array(remap_action)
 
 def scale_action(action, scale=[0.44, 1.05]):
     scale = scale*2
