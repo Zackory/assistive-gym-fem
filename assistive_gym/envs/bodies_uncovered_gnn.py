@@ -123,7 +123,7 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
                 cloth_vector = cloth_vector/np.linalg.norm(cloth_vector)
                 theta = np.arccos(np.clip(np.dot(trajectory_vector, cloth_vector), -1.0, 1.0))
                 # if d < 0.01 and p3[2]>=0.58 and theta < np.pi/2:
-                if d < 0.015 and p3[2]>=0.58 and theta < np.pi/2:
+                if d < 0.02 and p3[2]>=0.58 and theta < np.pi/2:
                     # print(theta)
                     dists.append(np.linalg.norm(midpoint-p3[0:2]))
                     points.append(p3)
@@ -176,7 +176,11 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
         # * scale bounds the 2D grasp and release locations to the area over the mattress (action nums only in range [-1, 1])
         # * if using the naive approach, do not scale the action since it is determined directly from points over the bed
-        action = scale_action(action) if not self.naive else scale_action(action, scale=[1, 1])
+        if action is None:
+            data_i = p.getMeshData(self.blanket, -1, flags=p.MESH_DATA_SIMULATION_MESH, physicsClientId=self.id)
+            return obs, 0, 1, {'cloth_initial':data_i}
+        else:
+            action = scale_action(action) if not self.naive else scale_action(action, scale=[1, 1])
 
         grasp_loc = action[0:2]
         release_loc = action[2:4]
@@ -342,10 +346,10 @@ class BodiesUncoveredGNNEnv(AssistiveEnv):
 
         super(BodiesUncoveredGNNEnv, self).reset()
         self.build_assistive_env(fixed_human_base=False, gender=self.gender, human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
-        # self.build_assistive_env(fixed_human_base=False, gender='female', human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
+        # self.build_assistive_env(fixed_human_base=False, gendesr='femfale', human_impairment='none', furniture_type='hospital_bed', body_shape=self.body_shape)
 
-        self.target_limb_code = self.target_limb_code if not self.single_ppo_model else randomize_target_limbs()
-
+        # self.target_limb_code = self.target_limb_code if not self.single_ppo_model else randomize_target_limbs()
+        self.target_limb_code = randomize_target_limbs()
         # * enable rendering
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1, physicsClientId=self.id)
         
